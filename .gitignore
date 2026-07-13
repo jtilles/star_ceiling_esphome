@@ -3,3 +3,5 @@
 *.exe
 *.o
 tests/test_illuminate_protocol
+__pycache__/
+*.pyc

@@ -1,0 +1,56 @@
+esphome:
+  name: illuminate-test
+
+esp8266:
+  board: nodemcuv2
+
+external_components:
+  - source:
+      type: local
+      path: ../components
+
+logger:
+
+uart:
+  id: illuminate_uart
+  tx_pin: GPIO1
+  rx_pin: GPIO3
+  baud_rate: 9600
+
+illuminate:
+  id: illuminate_hub
+  uart_id: illuminate_uart
+
+light:
+  - platform: illuminate
+    type: ambient
+    name: Ambient Light
+    illuminate_id: illuminate_hub
+    effects:
+      - illuminate_ambient_fade:
+          speed: 220
+      - illuminate_ambient_blink:
+
+  - platform: illuminate
+    type: starry_night
+    name: Star Ceiling
+    illuminate_id: illuminate_hub
+    effects:
+      - illuminate_twinkle:
+      - illuminate_firefly:
+      - illuminate_breeze:
+      - illuminate_random:
+      - illuminate_rain_drops:
+      - illuminate_jamboree:
+
+  - platform: illuminate
+    type: shooting_star
+    name: Shooting Star Zone 1
+    illuminate_id: illuminate_hub
+    zone: zone_1
+    duration: 2min
+
+select:
+  - platform: illuminate
+    name: Star Ceiling Color Transition
+    illuminate_id: illuminate_hub

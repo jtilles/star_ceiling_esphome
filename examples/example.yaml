@@ -1,3 +1,84 @@
-# STUB: full working example config (uart:, illuminate: hub, both light platforms, one
-# shooting star zone) will be written after those components are implemented and
-# compiled successfully against real hardware (see project plan, step 7).
+# Example config for a single Fusion Synergy "Illuminate 1.0" board (SP firmware:
+# Starry Night + Ambient Light). Copy this into your own ESPHome config and adjust the
+# pins, names, and secrets as needed.
+#
+# If you also have a second, SS-firmware board for Shooting Star, add a second `uart:`
+# bus on two more GPIOs and a second `illuminate:` hub pointing at it - see the README's
+# "Daisy-chaining two boards" section. This example only wires up one board.
+
+esphome:
+  name: illuminate-star-ceiling
+
+esp8266:
+  board: nodemcuv2
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+
+api:
+logger:
+
+# This is the ONLY UART bus this ESP8266 should have. The Illuminate "Main" MCU expects
+# a raw, unshared 9600 8N1 stream on the header the HM-10 BLE module normally plugs into
+# - don't attach any other uart: device to these pins/bus.
+uart:
+  id: illuminate_uart
+  tx_pin: GPIO1  # ESP8266 TX -> board RX (the pin the HM-10's RX would normally read)
+  rx_pin: GPIO3  # ESP8266 RX <- board TX. Verify your dev board's RX pin is 5V tolerant
+  #              # before wiring it directly to the board's 5V TTL TX line - see README.
+  baud_rate: 9600
+
+# The hub component: owns the UART bus and translates high-level calls from the light/
+# select platforms below into the Illuminate RS232 command strings.
+illuminate:
+  id: illuminate_hub
+  uart_id: illuminate_uart
+
+light:
+  # Ambient Light: RGBW color -> "A,R,G,B,W*", brightness -> "d,{pct}*" (10-100%),
+  # Fade/Blink -> "e,{speed}"/"k,{speed}" as selectable effects.
+  - platform: illuminate
+    type: ambient
+    name: Ambient Light
+    illuminate_id: illuminate_hub
+    effects:
+      - illuminate_ambient_fade:
+          speed: 220  # 150 (slow) - 255 (fast), fixed per effect entry - see README
+      - illuminate_ambient_blink:
+          speed: 200
+
+  # Starry Night: RGBW color -> "c,R,G,B,W*", brightness -> "D,{pct}*" (10-100%), and the
+  # six named animations as selectable effects (each a one-shot command; the hardware
+  # runs the animation itself from there).
+  - platform: illuminate
+    type: starry_night
+    name: Star Ceiling
+    illuminate_id: illuminate_hub
+    effects:
+      - illuminate_twinkle:
+      - illuminate_firefly:
+      - illuminate_breeze:
+      - illuminate_random:
+      - illuminate_rain_drops:
+      - illuminate_jamboree:
+
+# Wipe/Fade/Rainbow/Blink color transitions are a modifier on top of Starry Night's
+# active color/effect, not an alternate mode, so they're a companion select rather than
+# folded into the light's effects: list above - see README for the reasoning.
+select:
+  - platform: illuminate
+    name: Star Ceiling Color Transition
+    illuminate_id: illuminate_hub
+
+# Shooting Star zone(s): ONLY functional on SS-firmware units - see README. Commented
+# out here since this example targets a single SP-firmware board. Uncomment and point
+# `illuminate_id:` at a second hub (on a second uart: bus) if you have an SS board too.
+#
+# light:
+#   - platform: illuminate
+#     type: shooting_star
+#     name: Shooting Star Zone 1
+#     illuminate_id: illuminate_hub_ss
+#     zone: zone_1        # zone_1 / zone_2 / zone_3 (SS1/SS2/SS3 on the board silkscreen)
+#     duration: 1min       # 1min / 2min / 5min / 10min - fixed shot length for this entity
