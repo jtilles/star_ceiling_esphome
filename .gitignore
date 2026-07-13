@@ -5,3 +5,4 @@
 tests/test_illuminate_protocol
 __pycache__/
 *.pyc
+desktop.ini

@@ -4,6 +4,14 @@ An ESPHome external component for the Fusion Synergy "Illuminate 1.0" star ceili
 ambient lighting controller, so it can be driven natively from Home Assistant over a
 direct UART connection instead of the proprietary Bluetooth phone app.
 
+<img src="docs/images/illuminate1.0_render.png" alt="Illuminate 1.0 controller enclosure, front and rear panel" width="500">
+
+> **Built with [Claude Code](https://claude.com/claude-code).** The RS232 protocol was
+> reverse-engineered and validated against real hardware by the repo owner; the ESPHome
+> component (Python codegen, C++ classes, and this README) was written by Claude Code
+> against that protocol and the manual linked below, then verified by actually compiling
+> it with `esphome compile`. Review the code with that in mind.
+
 **Status:** the protocol layer, hub component, both light platforms (Ambient Light and
 Starry Night), the Starry Night color-transition select, and the Shooting Star light are
 all implemented and pass `esphome compile` against the example config. Starry Night
@@ -21,8 +29,7 @@ MAX3232 level shifter). This component bypasses both: it talks directly to the T
 UART pins the HM-10 module normally occupies, from an ESP8266 dev board plugged into the
 same socket.
 
-Official manual: *(link placeholder — add a link to the official Illuminate 1.0 manual
-here)*.
+Official manual: [`docs/IlluminateUserManual.pdf`](docs/IlluminateUserManual.pdf).
 
 ## SP vs. SS firmware — read this before wiring up Shooting Star
 
@@ -41,8 +48,12 @@ SP-firmware board; there's nothing else to disable.
 
 ## Wiring
 
-Connect the ESP8266 directly to the header the HM-10 Bluetooth module normally plugs
-into (labeled `D0`-`D8` or similar depending on board silkscreen revision):
+<img src="docs/images/board_wo_bluetooth_or_wifi.jpg" alt="Illuminate 1.0 Main board with the HM-10/ESP8266 wireless module removed, showing the header socket" width="450">
+
+The board above has its wireless module (HM-10 BLE or an ESP8266, depending on SKU)
+removed, showing the header socket this component connects to instead. Connect the
+ESP8266 directly to that header (labeled `D0`-`D8` or similar depending on board
+silkscreen revision):
 
 | ESP8266 | Illuminate board |
 |---------|-------------------|
