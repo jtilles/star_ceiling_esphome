@@ -17,6 +17,12 @@ wifi:
   password: !secret wifi_password
 
 api:
+
+# Required for `esphome run`/`esphome upload` to re-flash over Wi-Fi after the initial
+# USB flash - without it, every update needs a USB cable again.
+ota:
+  platform: esphome
+
 logger:
 
 # This is the ONLY UART bus this ESP8266 should have. The Illuminate "Main" MCU expects
