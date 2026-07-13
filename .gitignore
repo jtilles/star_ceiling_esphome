@@ -6,3 +6,9 @@ tests/test_illuminate_protocol
 __pycache__/
 *.pyc
 desktop.ini
+
+# Personal device configs and secrets - this repo only ships examples/example.yaml as a
+# template; real configs for actual installations (with real wifi/api credentials) should
+# never be committed.
+secrets.yaml
+cooper_ceiling.yaml
