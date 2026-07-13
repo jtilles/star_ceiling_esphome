@@ -1,0 +1,5 @@
+.esphome/
+.pio/
+*.exe
+*.o
+tests/test_illuminate_protocol
