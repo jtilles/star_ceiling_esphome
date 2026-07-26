@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Illuminate 1.0 — Serial Console</title>
+<style>
+  :root{
+    --bg: #0a0d16;
+    --panel: #12172a;
+    --panel-2: #171d35;
+    --line: #262d4a;
+    --ink: #e7e9f5;
+    --ink-dim: #8890b5;
+    --gold: #f2c14e;
+    --gold-dim: #a98a3c;
+    --good: #57d38c;
+    --bad: #e85d5d;
+    --mono: 'SFMono-Regular', Consolas, 'Liberation Mono', Menlo, monospace;
+    --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Inter, Roboto, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:
+      radial-gradient(1px 1px at 10% 20%, #ffffff55 50%, transparent 51%),
+      radial-gradient(1px 1px at 80% 10%, #ffffff33 50%, transparent 51%),
+      radial-gradient(1.5px 1.5px at 60% 70%, #ffffff44 50%, transparent 51%),
+      radial-gradient(1px 1px at 30% 85%, #ffffff2e 50%, transparent 51%),
+      radial-gradient(1px 1px at 92% 60%, #ffffff3a 50%, transparent 51%),
+      radial-gradient(1px 1px at 45% 45%, #ffffff28 50%, transparent 51%),
+      linear-gradient(180deg, #070912, #0a0d16 40%, #0a0d16);
+    background-attachment: fixed;
+    color: var(--ink);
+    font-family: var(--sans);
+    padding: 32px 20px 80px;
+  }
+  .wrap{max-width: 980px; margin: 0 auto;}
+  header{
+    display:flex; align-items:baseline; justify-content:space-between;
+    border-bottom: 1px solid var(--line); padding-bottom: 18px; margin-bottom: 28px;
+    flex-wrap: wrap; gap: 10px;
+  }
+  header h1{
+    font-size: 22px; letter-spacing: 0.02em; margin: 0; font-weight: 700;
+  }
+  header h1 span{ color: var(--gold); }
+  header .sub{ color: var(--ink-dim); font-size: 12.5px; margin-top: 4px; }
+  .status-line{ display:flex; align-items:center; gap:8px; font-family: var(--mono); font-size: 12.5px; color: var(--ink-dim); }
+  .dot{ width:8px; height:8px; border-radius:50%; background: var(--bad); box-shadow: 0 0 8px var(--bad); }
+  .dot.on{ background: var(--good); box-shadow: 0 0 8px var(--good); }
+
+  .grid{ display:grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  @media (max-width: 780px){ .grid{ grid-template-columns: 1fr; } }
+
+  .panel{
+    background: linear-gradient(180deg, var(--panel), var(--panel-2));
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 20px;
+    margin-bottom: 18px;
+  }
+  .panel h2{
+    font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em;
+    color: var(--gold-dim); margin: 0 0 14px; font-weight: 700;
+  }
+  .row{ display:flex; align-items:center; gap:10px; flex-wrap:wrap; margin-bottom: 10px; }
+  .row:last-child{ margin-bottom: 0; }
+  label{ font-size: 12.5px; color: var(--ink-dim); min-width: 70px; }
+
+  select, input[type=text], input[type=number]{
+    background: #0d1224; border: 1px solid var(--line); color: var(--ink);
+    border-radius: 6px; padding: 7px 10px; font-family: var(--mono); font-size: 13px;
+  }
+  input[type=color]{
+    width: 40px; height: 32px; border-radius: 6px; border: 1px solid var(--line);
+    background: none; padding: 0; cursor: pointer;
+  }
+
+  button{
+    background: #1b2140; border: 1px solid var(--line); color: var(--ink);
+    padding: 8px 14px; border-radius: 6px; font-size: 12.5px; cursor: pointer;
+    font-family: var(--sans); font-weight: 600; transition: all .12s ease;
+  }
+  button:hover{ border-color: var(--gold-dim); color: var(--gold); }
+  button:active{ transform: translateY(1px); }
+  button:disabled{ opacity: 0.35; cursor: not-allowed; }
+  button.primary{ background: var(--gold); color: #23190a; border-color: var(--gold); }
+  button.primary:hover{ background: #ffd370; color: #23190a; }
+  button.danger:hover{ border-color: var(--bad); color: var(--bad); }
+
+  .swatches{ display:flex; flex-wrap: wrap; gap: 8px; }
+  .swatch{
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    border: 2px solid #ffffff22; position: relative;
+    transition: transform .12s ease, border-color .12s ease;
+  }
+  .swatch:hover{ transform: scale(1.14); border-color: var(--gold); }
+  .swatch::after{
+    content: attr(data-name);
+    position:absolute; bottom: 130%; left:50%; transform: translateX(-50%);
+    background:#000; color:#fff; font-size: 10px; padding: 3px 6px; border-radius: 4px;
+    white-space: nowrap; opacity:0; pointer-events:none; transition: opacity .12s ease;
+  }
+  .swatch:hover::after{ opacity: 1; }
+
+  .effects{ display:flex; flex-wrap: wrap; gap: 8px; }
+  .zone-tabs{ display:flex; gap: 6px; margin-bottom: 12px; }
+  .zone-tabs button.active{ background: var(--gold); color:#23190a; border-color: var(--gold); }
+
+  input[type=range]{ flex:1; accent-color: var(--gold); min-width: 100px; }
+  .val{ font-family: var(--mono); font-size: 12px; color: var(--gold); min-width: 34px; text-align:right; }
+
+  #log{
+    background: #05070d; border: 1px solid var(--line); border-radius: 8px;
+    height: 200px; overflow-y: auto; padding: 10px 12px; font-family: var(--mono);
+    font-size: 11.5px; line-height: 1.6;
+  }
+  #log .tx{ color: var(--gold); }
+  #log .rx{ color: var(--good); }
+  #log .sys{ color: var(--ink-dim); font-style: italic; }
+
+  .cmd-preview{
+    font-family: var(--mono); font-size: 11.5px; color: var(--ink-dim);
+    background: #05070d; border: 1px solid var(--line); border-radius: 6px;
+    padding: 6px 10px; margin-top: 8px;
+  }
+  .cmd-preview b{ color: var(--gold); }
+
+  footer{ text-align:center; color: var(--ink-dim); font-size: 11.5px; margin-top: 30px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div>
+      <h1>ILLUMINATE <span>1.0</span> — Serial Console</h1>
+      <div class="sub">Manual override for the Standard Star Control System · RS232 command set</div>
+    </div>
+    <div class="status-line">
+      <div class="dot" id="statusDot"></div>
+      <span id="statusText">Disconnected</span>
+    </div>
+  </header>
+
+  <div class="panel">
+    <h2>Connection</h2>
+    <div class="zone-tabs" id="connModeTabs">
+      <button class="active" data-mode="serial">Wired — Serial (RS232)</button>
+      <button data-mode="bluetooth">Wireless — Bluetooth (BLE)</button>
+    </div>
+
+    <div id="serialPanel">
+      <div class="row">
+        <label>Port</label>
+        <button class="primary" id="connectBtn">Connect Serial Port</button>
+        <button class="danger" id="disconnectBtn" disabled>Disconnect</button>
+      </div>
+      <div class="row">
+        <label>Baud</label>
+        <select id="baudRate">
+          <option value="9600" selected>9600</option>
+          <option value="4800">4800</option>
+          <option value="19200">19200</option>
+          <option value="38400">38400</option>
+          <option value="57600">57600</option>
+          <option value="115200">115200</option>
+        </select>
+        <span style="color:var(--ink-dim); font-size:11.5px;">Not specified in manual — 9600 is the common default for these RS232 controllers. Change and reconnect if the panel doesn't respond.</span>
+      </div>
+    </div>
+
+    <div id="blePanel" style="display:none;">
+      <div class="row">
+        <label>Device</label>
+        <button class="primary" id="bleConnectBtn">Pair Bluetooth Device</button>
+        <button class="danger" id="bleDisconnectBtn" disabled>Disconnect</button>
+      </div>
+      <div class="row">
+        <label>Service</label>
+        <input type="text" id="bleServiceUuid" value="0000ffe0-0000-1000-8000-00805f9b34fb" style="width:280px;">
+      </div>
+      <div class="row">
+        <label>Characteristic</label>
+        <input type="text" id="bleCharUuid" value="0000ffe1-0000-1000-8000-00805f9b34fb" style="width:280px;">
+      </div>
+      <div class="row" style="color:var(--ink-dim); font-size:11.5px;">
+        Defaults are the standard HM-10 UUIDs (FFE0 service / FFE1 characteristic, used for both write and notify). Many clone modules (CC41-A, AT-09, etc.) reuse these — if pairing connects but nothing happens, check your module's datasheet or scan it with a BLE explorer app to confirm the real UUIDs, then edit the fields above and reconnect.
+      </div>
+    </div>
+  </div>
+
+  <div class="grid">
+
+    <div class="panel">
+      <h2>Starry Night — Effects</h2>
+      <div class="effects" id="starEffects"></div>
+      <div class="row" style="margin-top:14px;">
+        <label>Transition</label>
+        <div class="effects" id="starTransitions"></div>
+      </div>
+      <div class="row" style="margin-top:14px;">
+        <label>Dim %</label>
+        <input type="range" id="starDim" min="10" max="100" value="100">
+        <span class="val" id="starDimVal">100</span>
+        <button id="starDimSend">Set</button>
+      </div>
+      <div class="cmd-preview" id="starPreview">—</div>
+    </div>
+
+    <div class="panel">
+      <h2>Starry Night — Colors</h2>
+      <div class="swatches" id="starColors"></div>
+      <div class="row" style="margin-top:14px;">
+        <label>Custom</label>
+        <input type="color" id="starCustomColor" value="#ff0000">
+        <label style="min-width:auto;">W</label>
+        <input type="range" id="starCustomW" min="0" max="255" value="0" style="width:90px;">
+        <span class="val" id="starCustomWVal">0</span>
+        <button id="starCustomSend">Send</button>
+      </div>
+      <div class="cmd-preview" id="starColorPreview">—</div>
+    </div>
+
+    <div class="panel">
+      <h2>Shooting Star</h2>
+      <div class="zone-tabs" id="ssZones">
+        <button class="active" data-zone="X">SS1</button>
+        <button data-zone="Y">SS2</button>
+        <button data-zone="Z">SS3</button>
+      </div>
+      <div class="swatches" id="ssColors"></div>
+      <div class="row" style="margin-top:14px;">
+        <label>Interval</label>
+        <div class="effects" id="ssTimes"></div>
+      </div>
+      <div class="row">
+        <button class="danger" id="ssOff">Turn zone off</button>
+      </div>
+      <div class="cmd-preview" id="ssPreview">Select a color to set zone + time</div>
+    </div>
+
+    <div class="panel">
+      <h2>Ambient Light — Effects</h2>
+      <div class="row">
+        <button data-amb-effect="e">Fade</button>
+        <button data-amb-effect="k">Blink</button>
+        <button data-amb-effect="n">No Effect</button>
+      </div>
+      <div class="row" style="margin-top:10px;">
+        <label>Speed</label>
+        <input type="range" id="ambSpeed" min="150" max="255" value="200">
+        <span class="val" id="ambSpeedVal">200</span>
+        <span style="color:var(--ink-dim); font-size:11px;">150=slow · 255=fast</span>
+      </div>
+      <div class="cmd-preview" id="ambEffectPreview">—</div>
+    </div>
+
+    <div class="panel">
+      <h2>Ambient Light — Colors</h2>
+      <div class="swatches" id="ambColors"></div>
+      <div class="row" style="margin-top:14px;">
+        <label>Custom</label>
+        <input type="color" id="ambCustomColor" value="#ff0000">
+        <label style="min-width:auto;">W</label>
+        <input type="range" id="ambCustomW" min="0" max="255" value="0" style="width:90px;">
+        <span class="val" id="ambCustomWVal">0</span>
+        <button id="ambCustomSend">Send</button>
+      </div>
+      <div class="cmd-preview" id="ambColorPreview">—</div>
+    </div>
+
+    <div class="panel">
+      <h2>Dimmers</h2>
+      <div class="row">
+        <label>Stars %</label>
+        <input type="range" id="starDimmer" min="10" max="100" value="100">
+        <span class="val" id="starDimmerVal">100</span>
+        <button id="starDimmerSend">Set</button>
+      </div>
+      <div class="row">
+        <label>Ambient %</label>
+        <input type="range" id="stripDimmer" min="10" max="100" value="100">
+        <span class="val" id="stripDimmerVal">100</span>
+        <button id="stripDimmerSend">Set</button>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="panel">
+    <h2>Raw Command</h2>
+    <div class="row">
+      <input type="text" id="rawCmd" placeholder="e.g. c,255,0,0,0*" style="flex:1;">
+      <button class="primary" id="rawSend">Send</button>
+    </div>
+    <div class="row" style="color:var(--ink-dim); font-size:11.5px;">
+      Sent exactly as typed — no character is appended automatically.
+    </div>
+  </div>
+
+  <div class="panel">
+    <h2>Log</h2>
+    <div id="log"></div>
+    <div class="row" style="margin-top:10px;">
+      <button id="clearLog">Clear log</button>
+    </div>
+  </div>
+
+  <footer>Requires Chrome, Edge, or another browser supporting Web Serial (wired RS232) and Web Bluetooth (wireless BLE). Web Bluetooth additionally requires HTTPS or localhost. All commands are drawn directly from the Illuminate 1.0 RS232 reference.</footer>
+
+</div>
+
+<script>
+const COLORS = [
+  ["Red", 255,0,0,0], ["Orange", 255,50,0,0], ["Amber", 255,150,0,0], ["Yellow", 255,255,0,0],
+  ["Green", 0,255,0,0], ["Light green", 0,255,150,0], ["Lime", 0,255,50,0], ["Aqua", 0,255,255,0],
+  ["Blue", 0,0,255,0], ["Violet", 150,0,255,0], ["Purple", 255,0,200,0], ["Pink", 255,0,50,0],
+  ["White", 0,0,0,255], ["Warm White", 202,218,255,0], ["Natural White", 255,246,237,0], ["Cool White", 255,193,141,0]
+];
+const STAR_EFFECTS = [["Twinkle","T"],["Firefly","F"],["Breeze","B"],["Random","R"],["Rain Drops","P"],["Jamboree","J"]];
+const TRANSITIONS = [["Wipe","w"],["Fade","f"],["Rainbow","r"],["Blink","b"]];
+const TIMES = [["Off","0"],["1 min","1"],["2 min","2"],["5 min","5"],["10 min","10"]];
+
+let port=null, writer=null, reader=null, keepReading=false;
+let bleDevice=null, bleServer=null, bleChar=null;
+let connMode = "serial"; // "serial" | "bluetooth"
+
+const $ = id => document.getElementById(id);
+const log = (text, cls) => {
+  const el = $("log");
+  const line = document.createElement("div");
+  line.className = cls;
+  const t = new Date().toLocaleTimeString();
+  line.textContent = `[${t}] ${text}`;
+  el.appendChild(line);
+  el.scrollTop = el.scrollHeight;
+};
+
+function swatchStyle(r,g,b,w){
+  // approximate white-channel contribution for display
+  const rr = Math.min(255, r + w*0.3);
+  const gg = Math.min(255, g + w*0.3);
+  const bb = Math.min(255, b + w*0.3);
+  return `background: rgb(${rr},${gg},${bb});`;
+}
+
+async function send(cmd){
+  if(connMode === "bluetooth"){
+    if(!bleChar){ log("Not connected (Bluetooth) — command not sent: " + cmd, "sys"); return; }
+    try{
+      await bleChar.writeValue(new TextEncoder().encode(cmd));
+      log(cmd, "tx");
+    }catch(e){
+      log("BLE send error: " + e.message, "sys");
+    }
+    return;
+  }
+  if(!writer){ log("Not connected — command not sent: " + cmd, "sys"); return; }
+  try{
+    await writer.write(new TextEncoder().encode(cmd));
+    log(cmd, "tx");
+  }catch(e){
+    log("Send error: " + e.message, "sys");
+  }
+}
+
+async function connect(){
+  try{
+    port = await navigator.serial.requestPort();
+    const baud = parseInt($("baudRate").value, 10);
+    await port.open({ baudRate: baud });
+    writer = port.writable.getWriter();
+    keepReading = true;
+    readLoop();
+    $("statusDot").classList.add("on");
+    $("statusText").textContent = "Connected @ " + baud;
+    $("connectBtn").disabled = true;
+    $("disconnectBtn").disabled = false;
+    log("Port opened at " + baud + " baud", "sys");
+  }catch(e){
+    log("Connection failed: " + e.message, "sys");
+  }
+}
+
+async function readLoop(){
+  const decoder = new TextDecoderStream();
+  const readableClosed = port.readable.pipeTo(decoder.writable);
+  reader = decoder.readable.getReader();
+  try{
+    while(keepReading){
+      const { value, done } = await reader.read();
+      if(done) break;
+      if(value) log(value, "rx");
+    }
+  }catch(e){
+    log("Read error: " + e.message, "sys");
+  }finally{
+    reader.releaseLock();
+  }
+}
+
+async function disconnect(){
+  try{
+    keepReading = false;
+    if(reader){ await reader.cancel().catch(()=>{}); }
+    if(writer){ writer.releaseLock(); writer=null; }
+    if(port){ await port.close(); port=null; }
+    $("statusDot").classList.remove("on");
+    $("statusText").textContent = "Disconnected";
+    $("connectBtn").disabled = false;
+    $("disconnectBtn").disabled = true;
+    log("Port closed", "sys");
+  }catch(e){
+    log("Disconnect error: " + e.message, "sys");
+  }
+}
+
+$("connectBtn").addEventListener("click", connect);
+$("disconnectBtn").addEventListener("click", disconnect);
+
+if(!("serial" in navigator)){
+  $("connectBtn").disabled = true;
+  log("Web Serial API not available in this browser. Use Chrome or Edge on desktop.", "sys");
+}
+
+// ---- Connection mode tabs ----
+document.querySelectorAll("#connModeTabs button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll("#connModeTabs button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    connMode = btn.dataset.mode;
+    $("serialPanel").style.display = connMode === "serial" ? "" : "none";
+    $("blePanel").style.display = connMode === "bluetooth" ? "" : "none";
+    // reflect the active transport's connection state in the header
+    if(connMode === "serial"){
+      $("statusDot").classList.toggle("on", !!writer);
+      $("statusText").textContent = writer ? "Connected (Serial)" : "Disconnected";
+    } else {
+      $("statusDot").classList.toggle("on", !!bleChar);
+      $("statusText").textContent = bleChar ? "Connected (Bluetooth)" : "Disconnected";
+    }
+  });
+});
+
+// ---- Bluetooth (BLE) connection ----
+async function bleConnect(){
+  if(!("bluetooth" in navigator)){
+    log("Web Bluetooth API not available in this browser. Use Chrome or Edge, and note it requires HTTPS or localhost (not a plain file:// page).", "sys");
+    return;
+  }
+  const serviceUuid = $("bleServiceUuid").value.trim().toLowerCase();
+  const charUuid = $("bleCharUuid").value.trim().toLowerCase();
+  try{
+    bleDevice = await navigator.bluetooth.requestDevice({
+      filters: [{ services: [serviceUuid] }],
+      optionalServices: [serviceUuid]
+    });
+    log("Selected device: " + (bleDevice.name || "(unnamed)"), "sys");
+    bleDevice.addEventListener("gattserverdisconnected", onBleDisconnected);
+    bleServer = await bleDevice.gatt.connect();
+    const service = await bleServer.getPrimaryService(serviceUuid);
+    bleChar = await service.getCharacteristic(charUuid);
+
+    // Subscribe to notifications if the characteristic supports it (HM-10 uses the same
+    // characteristic for both write and notify)
+    if(bleChar.properties.notify || bleChar.properties.indicate){
+      await bleChar.startNotifications();
+      bleChar.addEventListener("characteristicvaluechanged", e=>{
+        const text = new TextDecoder().decode(e.target.value);
+        log(text, "rx");
+      });
+    }
+
+    $("statusDot").classList.add("on");
+    $("statusText").textContent = "Connected (Bluetooth)";
+    $("bleConnectBtn").disabled = true;
+    $("bleDisconnectBtn").disabled = false;
+    log("Bluetooth connected — service " + serviceUuid + ", characteristic " + charUuid, "sys");
+  }catch(e){
+    log("Bluetooth connection failed: " + e.message, "sys");
+  }
+}
+
+function onBleDisconnected(){
+  bleServer = null;
+  bleChar = null;
+  $("statusDot").classList.remove("on");
+  $("statusText").textContent = "Disconnected";
+  $("bleConnectBtn").disabled = false;
+  $("bleDisconnectBtn").disabled = true;
+  log("Bluetooth device disconnected", "sys");
+}
+
+async function bleDisconnect(){
+  try{
+    if(bleDevice && bleDevice.gatt.connected){
+      bleDevice.gatt.disconnect();
+    } else {
+      onBleDisconnected();
+    }
+  }catch(e){
+    log("Bluetooth disconnect error: " + e.message, "sys");
+  }
+}
+
+$("bleConnectBtn").addEventListener("click", bleConnect);
+$("bleDisconnectBtn").addEventListener("click", bleDisconnect);
+
+if(!("bluetooth" in navigator)){
+  $("bleConnectBtn").disabled = true;
+}
+
+// ---- Starry Night Effects ----
+STAR_EFFECTS.forEach(([name,code])=>{
+  const b = document.createElement("button");
+  b.textContent = name;
+  b.addEventListener("click", ()=>{
+    $("starPreview").innerHTML = `<b>${code}</b> — ${name}`;
+    send(code);
+  });
+  $("starEffects").appendChild(b);
+});
+TRANSITIONS.forEach(([name,code])=>{
+  const b = document.createElement("button");
+  b.textContent = name;
+  b.addEventListener("click", ()=>{
+    $("starPreview").innerHTML = `<b>${code}</b> — ${name} transition`;
+    send(code);
+  });
+  $("starTransitions").appendChild(b);
+});
+$("starDim").addEventListener("input", e => $("starDimVal").textContent = e.target.value);
+$("starDimSend").addEventListener("click", ()=>{
+  const v = $("starDim").value;
+  const cmd = `D,${v}*`;
+  $("starPreview").innerHTML = `<b>${cmd}</b> — star dim ${v}%`;
+  send(cmd);
+});
+
+// ---- Starry Night Colors ----
+COLORS.forEach(([name,r,g,b,w])=>{
+  const el = document.createElement("div");
+  el.className = "swatch";
+  el.dataset.name = name;
+  el.style.cssText = swatchStyle(r,g,b,w);
+  el.addEventListener("click", ()=>{
+    const cmd = `c,${r},${g},${b},${w}*`;
+    $("starColorPreview").innerHTML = `<b>${cmd}</b> — ${name}`;
+    send(cmd);
+  });
+  $("starColors").appendChild(el);
+});
+$("starCustomW").addEventListener("input", e => $("starCustomWVal").textContent = e.target.value);
+$("starCustomSend").addEventListener("click", ()=>{
+  const hex = $("starCustomColor").value;
+  const r = parseInt(hex.substr(1,2),16), g = parseInt(hex.substr(3,2),16), b = parseInt(hex.substr(5,2),16);
+  const w = $("starCustomW").value;
+  const cmd = `c,${r},${g},${b},${w}*`;
+  $("starColorPreview").innerHTML = `<b>${cmd}</b> — custom`;
+  send(cmd);
+});
+
+// ---- Shooting Star ----
+let ssZone = "X";
+document.querySelectorAll("#ssZones button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll("#ssZones button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    ssZone = btn.dataset.zone;
+  });
+});
+let ssTime = "1";
+COLORS.forEach(([name,r,g,b,w])=>{
+  const el = document.createElement("div");
+  el.className = "swatch";
+  el.dataset.name = name;
+  el.style.cssText = swatchStyle(r,g,b,w);
+  el.addEventListener("click", ()=>{
+    const cmd = `${ssZone},${r},${g},${b},${w},${ssTime}*`;
+    $("ssPreview").innerHTML = `<b>${cmd}</b> — zone ${ssZone==='X'?'SS1':ssZone==='Y'?'SS2':'SS3'}, ${name}, ${ssTime==='0'?'off':ssTime+' min'}`;
+    send(cmd);
+  });
+  $("ssColors").appendChild(el);
+});
+TIMES.forEach(([name,code])=>{
+  const b = document.createElement("button");
+  b.textContent = name;
+  if(code === "1") b.classList.add("active");
+  b.addEventListener("click", ()=>{
+    ssTime = code;
+    document.querySelectorAll("#ssTimes button").forEach(x=>x.classList.remove("active"));
+    b.classList.add("active");
+  });
+  $("ssTimes").appendChild(b);
+});
+$("ssOff").addEventListener("click", ()=>{
+  const cmd = `${ssZone},0,0,0,0,0*`;
+  $("ssPreview").innerHTML = `<b>${cmd}</b> — zone ${ssZone==='X'?'SS1':ssZone==='Y'?'SS2':'SS3'} off`;
+  send(cmd);
+});
+
+// ---- Ambient Light Effects ----
+$("ambSpeed").addEventListener("input", e => $("ambSpeedVal").textContent = e.target.value);
+document.querySelectorAll("[data-amb-effect]").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    const code = btn.dataset.ambEffect;
+    let cmd;
+    if(code === "n"){
+      cmd = "n";
+    } else {
+      cmd = `${code},${$("ambSpeed").value}`;
+    }
+    $("ambEffectPreview").innerHTML = `<b>${cmd}</b> — ${btn.textContent}`;
+    send(cmd);
+  });
+});
+
+// ---- Ambient Light Colors ----
+COLORS.forEach(([name,r,g,b,w])=>{
+  const el = document.createElement("div");
+  el.className = "swatch";
+  el.dataset.name = name;
+  el.style.cssText = swatchStyle(r,g,b,w);
+  el.addEventListener("click", ()=>{
+    const cmd = `A,${r},${g},${b},${w}*`;
+    $("ambColorPreview").innerHTML = `<b>${cmd}</b> — ${name}`;
+    send(cmd);
+  });
+  $("ambColors").appendChild(el);
+});
+$("ambCustomW").addEventListener("input", e => $("ambCustomWVal").textContent = e.target.value);
+$("ambCustomSend").addEventListener("click", ()=>{
+  const hex = $("ambCustomColor").value;
+  const r = parseInt(hex.substr(1,2),16), g = parseInt(hex.substr(3,2),16), b = parseInt(hex.substr(5,2),16);
+  const w = $("ambCustomW").value;
+  const cmd = `A,${r},${g},${b},${w}*`;
+  $("ambColorPreview").innerHTML = `<b>${cmd}</b> — custom`;
+  send(cmd);
+});
+
+// ---- Dimmers ----
+$("starDimmer").addEventListener("input", e => $("starDimmerVal").textContent = e.target.value);
+$("starDimmerSend").addEventListener("click", ()=>{
+  const v = $("starDimmer").value;
+  send(`D,${v}*`);
+});
+$("stripDimmer").addEventListener("input", e => $("stripDimmerVal").textContent = e.target.value);
+$("stripDimmerSend").addEventListener("click", ()=>{
+  const v = $("stripDimmer").value;
+  send(`d,${v}*`);
+});
+
+// ---- Raw command ----
+$("rawSend").addEventListener("click", ()=>{
+  const v = $("rawCmd").value;
+  if(v) send(v);
+});
+$("rawCmd").addEventListener("keydown", e=>{
+  if(e.key === "Enter") $("rawSend").click();
+});
+
+// ---- Clear log ----
+$("clearLog").addEventListener("click", ()=> $("log").innerHTML = "");
+
+log("Ready. Click \"Connect Serial Port\" to select the Illuminate 1.0 controller.", "sys");
+</script>
+</body>
+</html>

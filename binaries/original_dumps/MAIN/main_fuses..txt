@@ -1,0 +1,23 @@
+C:\Program Files\AVRDude>avrdude -c usbasp -p m328p -U lfuse:r:-:h -U hfuse:r:-:h -U efuse:r:-:h -U lock:r:-:h
+
+Processing -U lfuse:r:-:h
+Reading lfuse memory ...
+Writing 1 byte to output file <stdout>
+0xff
+
+Processing -U hfuse:r:-:h
+Reading hfuse memory ...
+Writing 1 byte to output file <stdout>
+0xda
+
+Processing -U efuse:r:-:h
+Reading efuse memory ...
+Writing 1 byte to output file <stdout>
+0xfd
+
+Processing -U lock:r:-:h
+Reading lock memory ...
+Writing 1 byte to output file <stdout>
+0xff
+
+Avrdude done.  Thank you.

@@ -1,0 +1,31 @@
+avrdude.exe : 
+At 
+C:\Users\josh\OneDrive\Documents\Projects\Fiber_optic_star_ceiling_esphome\binaries\original_dumps\dump_chip.ps1:115 
+char:19
++     $fuseOutput = & avrdude @fuseArgs 2>&1
++                   ~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+Processing -U lfuse:r:-:h
+Reading lfuse memory ...
+Writing 1 byte to output file <stdout>
+
+Processing -U hfuse:r:-:h
+0xff
+Reading hfuse memory ...
+Writing 1 byte to output file <stdout>
+0xda
+
+Processing -U efuse:r:-:h
+Reading efuse memory ...
+Writing 1 byte to output file <stdout>
+0xfd
+
+Processing -U lock:r:-:h
+Reading lock memory ...
+Writing 1 byte to output file <stdout>
+0xff
+
+Avrdude done.  Thank you.
+
