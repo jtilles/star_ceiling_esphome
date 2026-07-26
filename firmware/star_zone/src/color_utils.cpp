@@ -53,8 +53,24 @@ RGBW hue_to_rgb(uint8_t hue255) {
 }
 
 uint8_t hash8(uint16_t a, uint16_t b) {
-  uint32_t h = (uint32_t) a * 2654435761u + (uint32_t) b * 40503u;
-  return (uint8_t) (h >> 16);
+  // Callers pass a slowly-incrementing "time bucket" as b (RAIN_DROPS/RANDOM
+  // in star_effects.cpp), so this needs real avalanche: a +1 change to
+  // either input has to scramble every output bit, or consecutive buckets
+  // produce nearly the same value and a pixel gets "stuck" on/off for many
+  // ticks in a row instead of a fresh random draw each interval. A plain
+  // multiply-and-shift doesn't have that property (a naive earlier version
+  // of this function packed b's contribution into a 16-bit multiplier,
+  // which only nudged the output by a fraction of a unit per +1 - visually,
+  // "rain drops" that stay lit on the same few pixels far longer than
+  // intended). Thomas Wang's 32-bit integer hash below is a standard,
+  // cheap way to get proper avalanche.
+  uint32_t h = ((uint32_t) a << 16) | b;
+  h = (h ^ 61) ^ (h >> 16);
+  h = h + (h << 3);
+  h = h ^ (h >> 4);
+  h = h * 0x27d4eb2dU;
+  h = h ^ (h >> 15);
+  return (uint8_t) h;
 }
 
 }  // namespace color_utils
