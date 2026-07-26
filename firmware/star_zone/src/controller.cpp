@@ -19,31 +19,45 @@ void StarZoneController::begin() {
   randomSeed(analogRead(A6));
 }
 
-void StarZoneController::set_effect(StarryEffect effect) { effect_ = effect; }
+void StarZoneController::set_effect(StarryEffect effect) {
+  wake_();
+  effect_ = effect;
+}
 
-void StarZoneController::set_transition(ColorTransition transition) { transition_ = transition; }
+void StarZoneController::set_transition(ColorTransition transition) {
+  wake_();
+  transition_ = transition;
+}
 
 void StarZoneController::set_color(const RGBW &color) {
+  wake_();
   transition_from_ = color_;
   color_ = color;
   transition_started_ms_ = millis();
 }
 
 void StarZoneController::set_dimmer(uint8_t percent) {
+  wake_();
   dimmer_pct_ = constrain(percent, kDimmerMinPct, kDimmerMaxPct);
 }
 
 void StarZoneController::set_shooting_star(ShootingStarZone zone, const RGBW &color, uint8_t duration_minutes) {
+  wake_();
   shooting_star::start(shooting_star_[(uint8_t) zone], color, duration_minutes, millis());
 }
 
 void StarZoneController::set_master_brightness(uint8_t percent) {
+  wake_();
   master_brightness_pct_ = percent > 100 ? 100 : percent;
 }
 
-void StarZoneController::set_effect_speed(uint8_t speed) { effect_speed_ = speed; }
+void StarZoneController::set_effect_speed(uint8_t speed) {
+  wake_();
+  effect_speed_ = speed;
+}
 
 void StarZoneController::set_power(bool on, uint16_t transition_ms) {
+  wake_();
   power_on_ = on;
   power_transition_ms_ = transition_ms == 0 ? 1 : transition_ms;
   power_level_start_ = power_level_;  // interrupts any transition already in flight
@@ -52,22 +66,26 @@ void StarZoneController::set_power(bool on, uint16_t transition_ms) {
 }
 
 void StarZoneController::set_identify_mode(bool active) {
+  wake_();
   identify_active_ = active;
   if (active) identify_index_ = 0;
 }
 
 void StarZoneController::identify_step(int8_t delta) {
   if (!identify_active_) return;
+  wake_();
   int16_t idx = (int16_t) identify_index_ + delta;
   idx = ((idx % (int16_t) kLedCount) + (int16_t) kLedCount) % (int16_t) kLedCount;
   identify_index_ = (uint8_t) idx;
 }
 
 void StarZoneController::set_palette(uint8_t palette_id) {
+  wake_();
   palette_id_ = palette_id > palette::kPaletteCount ? palette::kSolidPaletteId : palette_id;
 }
 
 void StarZoneController::set_meteor_shower(bool active, uint16_t avg_interval_s) {
+  wake_();
   meteor_shower_active_ = active;
   meteor_shower_interval_s_ = avg_interval_s == 0 ? 1 : avg_interval_s;
   meteor_next_fire_ms_ = millis() + random(500, (uint32_t) meteor_shower_interval_s_ * 1000UL);
@@ -116,6 +134,12 @@ void StarZoneController::maybe_fire_meteor_(uint32_t now_ms) {
 void StarZoneController::tick(uint32_t now_ms) { render_(now_ms); }
 
 void StarZoneController::render_(uint32_t now_ms) {
+  if (booted_dark_) {
+    for (uint8_t i = 0; i < kLedCount; i++) strip_.setPixelColor(i, 0);
+    strip_.show();
+    return;
+  }
+
   RGBW active_color[kLedCount];
   for (uint8_t i = 0; i < kLedCount; i++) active_color[i] = compute_active_color_(i, now_ms);
 

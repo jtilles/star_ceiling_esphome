@@ -61,6 +61,17 @@ bool immediate_transition(char c, ColorTransition &out) {
 // command.
 bool starts_buffered_legacy(char c) { return c == 'c' || c == 'D' || c == 'X' || c == 'Y' || c == 'Z'; }
 
+// Whether `c` would begin a recognized command if it arrived with an empty
+// buffer - used to detect a byte arriving *mid*-buffer that can't actually
+// be a legitimate field of whatever command is in progress (none of R/G/B/W/
+// dimmer/duration/enhancement fields are ever letters), so it must be the
+// start of the next command instead. See poll()'s resync logic below.
+bool is_command_start(char c) {
+  StarryEffect effect;
+  ColorTransition transition;
+  return immediate_effect(c, effect) || immediate_transition(c, transition) || starts_buffered_legacy(c) || c == '!';
+}
+
 // Parses the next unsigned integer field at *p, advancing *p past the
 // following ',' or '*'. Returns false (leaving *p unmoved) if *p isn't a
 // digit.
@@ -155,6 +166,17 @@ void dispatch_enhancement(const char *cmd, uint8_t len, StarZoneController &cont
 void poll(Stream &serial, StarZoneController &controller) {
   while (serial.available() > 0) {
     char c = (char) serial.read();
+
+    // A dropped/corrupted byte (e.g. marginal UART signal integrity - see
+    // the "Top-Star reception" write-up in the root README) can leave a
+    // buffered command without its terminator. Without this check, every
+    // byte of the *next*, perfectly legitimate command would just get
+    // appended as if it were more of the stale one, silently eating it too,
+    // all the way until the buffer overflowed. None of R/G/B/W/dimmer/
+    // duration/enhancement fields are ever letters, so a command-start byte
+    // arriving mid-buffer can only mean the previous command desynced -
+    // abandon it and start fresh instead of appending.
+    if (buf_len > 0 && is_command_start(c)) buf_len = 0;
 
     if (buf_len == 0) {
       StarryEffect effect;

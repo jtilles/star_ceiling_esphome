@@ -30,6 +30,16 @@ set. This project replaces just those two zone chips with firmware that:
   palette-driven twinkle mode, and a meteor-shower auto-fire mode for
   Shooting Star.
 
+## Boot behavior
+
+The strip stays fully off from power-on until the first command of any kind
+is received (`StarZoneController::booted_dark_` in `controller.h`/`.cpp`).
+Earlier versions rendered the default Twinkle effect immediately at boot,
+which looked like an unprompted, roughly-synchronized "blinking heartbeat"
+across all 8 LEDs before anything had actually been commanded — not useful
+behavior for a controller that's supposed to reflect the last command it was
+given.
+
 ## What's original design vs. what's ported
 
 - **Legacy command parsing** (`protocol.cpp`) is transcribed directly from
@@ -96,6 +106,25 @@ repeating:
    Tune `shooting_star.cpp`'s streak speed/trail length to taste.
 3. Effect timings in `star_effects.cpp` are similarly original — adjust
    freely, nothing here is "the correct" Twinkle/Firefly/etc. speed.
+4. **Top-Star reception of longer commands.** First-hardware-test finding:
+   on one Top-Star chip (flashed and verified via ISP, receiving and acting
+   on single-byte commands like effect-select fine), multi-byte comma-
+   delimited commands (`c,R,G,B,W*` in particular) were silently having no
+   effect, while the same commands worked on Bot-Star. Single-byte commands
+   surviving while longer ones fail points at marginal UART signal
+   integrity on that chip's specific reception path corrupting/dropping a
+   byte mid-command, rather than a logic bug (the parser is identical for
+   both chips). This is also the exact hardware question flagged as
+   unresolved in `docs/illuminate-hardware-notes.md`: "Confirm whether
+   Top-Star's hardware RXD is on the same broadcast bus as Main/Bot-Star."
+   `protocol.cpp`'s parser now resyncs itself (abandons a buffered command
+   that never saw its terminator as soon as the next command-start byte
+   arrives) so one corrupted command can no longer also eat the next
+   legitimate one, but that's a mitigation, not a fix for a wiring/signal
+   integrity problem — if commands are still unreliable on a given chip
+   after this, capture that chip's RXD line during a `c,...*` send (the
+   Saleae tooling in `docs/tooling/` already does exactly this) to see
+   whether bytes are actually arriving intact.
 
 ## Building and flashing
 

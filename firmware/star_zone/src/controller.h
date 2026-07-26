@@ -44,9 +44,19 @@ class StarZoneController {
   RGBW compute_active_color_(uint8_t pixel_index, uint32_t now_ms) const;
   void render_(uint32_t now_ms);
   void maybe_fire_meteor_(uint32_t now_ms);
+  // Clears the "no command received yet" boot-dark state - called from the
+  // top of every public setter (see .cpp) so *any* command wakes the strip.
+  void wake_() { booted_dark_ = false; }
 
   Adafruit_NeoPixel &strip_;
   RGBW pixels_[kLedCount]{};
+
+  // Stays true from power-on until the first command of any kind is
+  // received, holding the strip fully off. Without this, the strip powers
+  // up straight into rendering the default Twinkle effect on the default
+  // color, which reads as an unwanted, unprompted "blinking heartbeat"
+  // before anything has actually been commanded.
+  bool booted_dark_{true};
 
   // Legacy state
   StarryEffect effect_{StarryEffect::TWINKLE};
