@@ -72,6 +72,28 @@ bool is_command_start(char c) {
   return immediate_effect(c, effect) || immediate_transition(c, transition) || starts_buffered_legacy(c) || c == '!';
 }
 
+// Parses a zone letter (X/Y/Z) at *p, advancing *p past it and a following
+// ',' or '*'. Returns false (leaving *p unmoved) if *p isn't one of those
+// three letters - unlike read_field, a zone is never numeric.
+bool read_zone(const char *&p, ShootingStarZone &out) {
+  switch (*p) {
+    case 'X':
+      out = ShootingStarZone::ZONE_X;
+      break;
+    case 'Y':
+      out = ShootingStarZone::ZONE_Y;
+      break;
+    case 'Z':
+      out = ShootingStarZone::ZONE_Z;
+      break;
+    default:
+      return false;
+  }
+  p++;
+  if (*p == ',' || *p == '*') p++;
+  return true;
+}
+
 // Parses the next unsigned integer field at *p, advancing *p past the
 // following ',' or '*'. Returns false (leaving *p unmoved) if *p isn't a
 // digit.
@@ -156,6 +178,14 @@ void dispatch_enhancement(const char *cmd, uint8_t len, StarZoneController &cont
         controller.set_meteor_shower(f[0] != 0, interval_s);
       }
       return;
+    case 'L': {
+      ShootingStarZone zone;
+      if (!read_zone(p, zone) || !read_field(p, f[0])) return;
+      uint16_t speed = 256;         // out-of-range sentinel: no speed field given
+      read_field(p, speed);         // optional - falls back to the shared "!S" speed
+      controller.set_shooting_star_config(zone, (uint8_t) f[0], speed);
+      return;
+    }
     default:
       return;
   }

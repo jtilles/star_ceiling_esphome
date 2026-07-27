@@ -7,11 +7,6 @@
 namespace star_zone {
 namespace shooting_star {
 
-namespace {
-// Trail length in pixels behind the streak's leading edge.
-constexpr float kTrailPixels = 3.0f;
-}  // namespace
-
 void start(ShootingStarSlot &slot, const RGBW &color, uint8_t duration_minutes, uint32_t now_ms, bool single_shot) {
   if (duration_minutes == 0 && !single_shot) {
     slot.firing = false;
@@ -54,11 +49,11 @@ bool tick(ShootingStarSlot &slot, RGBW *pixels, uint8_t count, uint32_t now_ms, 
     return true;
   }
 
-  float head = (float) elapsed / streak_ms * (count - 1 + kTrailPixels);
+  float head = (float) elapsed / streak_ms * (count - 1 + slot.trail_pixels);
   for (uint8_t i = 0; i < count; i++) {
     float dist = head - i;
-    if (dist < 0 || dist > kTrailPixels) continue;
-    uint8_t bright = (uint8_t) (255.0f * (1.0f - dist / kTrailPixels));
+    if (dist < 0 || dist > slot.trail_pixels) continue;
+    uint8_t bright = (uint8_t) (255.0f * (1.0f - dist / slot.trail_pixels));
     color_utils::blend_add(pixels[i], color_utils::scale(slot.color, bright));
   }
   return true;

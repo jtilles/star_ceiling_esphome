@@ -22,6 +22,10 @@
 //   '!V'*                          - identify: step to previous LED
 //   '!C',palette_id*               - palette-driven twinkle (0 = off/solid color)
 //   '!W',{0|1}[,avg_interval_s]*   - meteor-shower auto mode on/off
+//   '!L',zone,trail[,speed]*       - per-zone shooting star trail (pixels,
+//                                    clamped 1-40) and optional speed
+//                                    override (0-255; omit, or send 256+,
+//                                    to fall back to the shared '!S' speed)
 //
 // The undocumented 'O' single-byte command the original firmware's
 // dispatcher accepts (docs/illuminate-firmware-notes.md's "Undocumented"

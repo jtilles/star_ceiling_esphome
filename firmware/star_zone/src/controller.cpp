@@ -46,6 +46,13 @@ void StarZoneController::set_shooting_star(ShootingStarZone zone, const RGBW &co
   shooting_star::start(shooting_star_[(uint8_t) zone], color, duration_minutes, millis());
 }
 
+void StarZoneController::set_shooting_star_config(ShootingStarZone zone, uint8_t trail_pixels, uint16_t speed) {
+  wake_();
+  ShootingStarSlot &slot = shooting_star_[(uint8_t) zone];
+  slot.trail_pixels = (float) (trail_pixels < 1 ? 1 : (trail_pixels > 40 ? 40 : trail_pixels));
+  slot.speed_override = speed > 255 ? -1 : (int16_t) speed;
+}
+
 void StarZoneController::set_master_brightness(uint8_t percent) {
   wake_();
   master_brightness_pct_ = percent > 100 ? 100 : percent;
@@ -145,7 +152,10 @@ void StarZoneController::render_(uint32_t now_ms) {
 
   effects::render(effect_, pixels_, kLedCount, now_ms, effect_speed_, active_color, palette_id_);
 
-  for (auto &slot : shooting_star_) shooting_star::tick(slot, pixels_, kLedCount, now_ms, effect_speed_);
+  for (auto &slot : shooting_star_) {
+    uint8_t zone_speed = slot.speed_override >= 0 ? (uint8_t) slot.speed_override : effect_speed_;
+    shooting_star::tick(slot, pixels_, kLedCount, now_ms, zone_speed);
+  }
 
   maybe_fire_meteor_(now_ms);
   shooting_star::tick(meteor_slot_, pixels_, kLedCount, now_ms, effect_speed_);

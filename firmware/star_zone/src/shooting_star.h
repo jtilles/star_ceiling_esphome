@@ -30,6 +30,13 @@ struct ShootingStarSlot {
   uint32_t next_streak_ms{0};
   bool streak_active{false};
   uint32_t streak_start_ms{0};
+
+  // Per-zone tuning, set via the "!L" enhancement command
+  // (StarZoneController::set_shooting_star_config) - defaults reproduce the
+  // fixed values this firmware originally hardcoded, so a zone that's never
+  // been configured behaves exactly as before.
+  float trail_pixels{3.0f};        // fade length behind the streak's head, in pixels
+  int16_t speed_override{-1};      // -1 = fall back to the shared "!S" effect speed
 };
 
 namespace shooting_star {

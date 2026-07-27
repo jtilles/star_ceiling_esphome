@@ -81,6 +81,7 @@ versioning strategy):
 | `!N*` / `!V*` | Identify mode: step to next/previous LED |
 | `!C,palette_id*` | Palette-driven twinkle (0 = off, use the last `c` color; 1-4 = built-in palettes) |
 | `!W,{0\|1}[,avg_interval_s]*` | Meteor-shower auto mode on/off (default 20s average interval) |
+| `!L,zone,trail[,speed]*` | Per-zone shooting star trail length (pixels, clamped 1-40) and optional speed override (0-255; omit or send 256+ to fall back to `!S`) |
 
 The original firmware's undocumented `O` single-byte command
 (`docs/illuminate-firmware-notes.md`) is intentionally left unhandled —
@@ -103,7 +104,9 @@ repeating:
    this firmware produces.**
 2. **Shooting Star behavior is a new design, not a clone** — there's no
    original SS-firmware capture to match against (PRD open question #5).
-   Tune `shooting_star.cpp`'s streak speed/trail length to taste.
+   Trail length and speed are tunable per zone at runtime via `!L` (see the
+   command table above) rather than requiring a firmware rebuild - defaults
+   (3px trail, shared `!S` speed) reproduce the original hardcoded values.
 3. Effect timings in `star_effects.cpp` are similarly original — adjust
    freely, nothing here is "the correct" Twinkle/Firefly/etc. speed.
 4. **Top-Star reception of longer commands.** First-hardware-test finding:

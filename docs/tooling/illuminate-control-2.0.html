@@ -397,7 +397,7 @@
 
     <div class="panel new">
       <h2>Effect Speed <span class="badge-new">New</span></h2>
-      <div class="note new" style="margin-bottom:10px;">Continuous speed parameter, shared by the active Starry Night effect and any firing Shooting Star streaks (one global speed per chip - not selectable per-effect).</div>
+      <div class="note new" style="margin-bottom:10px;">Continuous speed parameter, shared by the active Starry Night effect and any firing Shooting Star streak that hasn't been given its own per-zone override below.</div>
       <div class="row">
         <label>Speed</label>
         <input type="range" id="speedVal" min="0" max="255" value="128">
@@ -405,6 +405,33 @@
         <button class="primary" id="speedSend">Set</button>
       </div>
       <div class="cmd-preview new" id="speedPreview">—</div>
+    </div>
+
+    <div class="panel new">
+      <h2>Shooting Star — Trail &amp; Speed <span class="badge-new">New</span></h2>
+      <div class="note new" style="margin-bottom:10px;">Per-zone fade-trail length and an optional speed override, independent of the shared Effect Speed above. Applies to that zone's next/ongoing streaks, set separately from firing one (see the gold Shooting Star panel).</div>
+      <div class="zone-tabs" id="ssConfigZones">
+        <button class="active" data-zone="X">SS1</button>
+        <button data-zone="Y">SS2</button>
+        <button data-zone="Z">SS3</button>
+      </div>
+      <div class="row">
+        <label>Trail</label>
+        <input type="range" id="ssConfigTrail" min="1" max="40" value="3">
+        <span class="val" id="ssConfigTrailVal">3</span>
+        <span class="note new">pixels</span>
+      </div>
+      <div class="row">
+        <label>Speed override</label>
+        <input type="checkbox" id="ssConfigSpeedEnabled" style="width:auto;">
+        <input type="range" id="ssConfigSpeed" min="0" max="255" value="150" disabled>
+        <span class="val" id="ssConfigSpeedVal">150</span>
+        <span class="note new">unchecked = use shared Effect Speed</span>
+      </div>
+      <div class="row">
+        <button class="primary" id="ssConfigSend">Set</button>
+      </div>
+      <div class="cmd-preview new" id="ssConfigPreview">—</div>
     </div>
 
     <div class="panel new">
@@ -858,6 +885,27 @@ $("speedSend").addEventListener("click", ()=>{
   const v = $("speedVal").value;
   const cmd = `!S,${v}*`;
   $("speedPreview").innerHTML = `<b>${cmd}</b> — effect/shooting-star speed ${v}`;
+  send(cmd, true);
+});
+
+// ---- Shooting Star: Trail & Speed ----
+let ssConfigZone = "X";
+document.querySelectorAll("#ssConfigZones button").forEach(btn=>{
+  btn.addEventListener("click", ()=>{
+    document.querySelectorAll("#ssConfigZones button").forEach(b=>b.classList.remove("active"));
+    btn.classList.add("active");
+    ssConfigZone = btn.dataset.zone;
+  });
+});
+$("ssConfigTrail").addEventListener("input", e => $("ssConfigTrailVal").textContent = e.target.value);
+$("ssConfigSpeed").addEventListener("input", e => $("ssConfigSpeedVal").textContent = e.target.value);
+$("ssConfigSpeedEnabled").addEventListener("change", e => $("ssConfigSpeed").disabled = !e.target.checked);
+$("ssConfigSend").addEventListener("click", ()=>{
+  const trail = $("ssConfigTrail").value;
+  const speedEnabled = $("ssConfigSpeedEnabled").checked;
+  const speed = $("ssConfigSpeed").value;
+  const cmd = speedEnabled ? `!L,${ssConfigZone},${trail},${speed}*` : `!L,${ssConfigZone},${trail}*`;
+  $("ssConfigPreview").innerHTML = `<b>${cmd}</b> — zone ${ssConfigZone}, trail ${trail}px${speedEnabled ? `, speed ${speed}` : ", shared speed"}`;
   send(cmd, true);
 });
 

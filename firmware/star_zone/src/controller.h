@@ -39,6 +39,10 @@ class StarZoneController {
   void identify_step(int8_t delta);
   void set_palette(uint8_t palette_id);
   void set_meteor_shower(bool active, uint16_t avg_interval_s);
+  // trail_pixels: fade length behind the streak's head, clamped to [1,40].
+  // speed: 0-255, or 256+ (any out-of-range value) to clear the override
+  // and fall back to the shared "!S" effect speed.
+  void set_shooting_star_config(ShootingStarZone zone, uint8_t trail_pixels, uint16_t speed);
 
  private:
   RGBW compute_active_color_(uint8_t pixel_index, uint32_t now_ms) const;
