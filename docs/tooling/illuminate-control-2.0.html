@@ -295,6 +295,13 @@
         <span class="val" id="starDimVal">100</span>
         <button id="starDimSend">Set</button>
       </div>
+      <div class="row new" style="margin-top:14px;">
+        <label>Wipe/Fade dur.</label>
+        <input type="range" id="fadeSpeedMs" min="50" max="10000" step="50" value="700">
+        <span class="val" id="fadeSpeedMsVal">700</span>
+        <span class="note new">ms - New, star_zone only</span>
+        <button class="primary" id="fadeSpeedSend">Set</button>
+      </div>
       <div class="cmd-preview" id="starPreview">—</div>
     </div>
 
@@ -314,7 +321,7 @@
 
     <div class="panel">
       <h2>Shooting Star</h2>
-      <div class="note" style="margin-bottom:10px;">Now functional via the star_zone replacement firmware (stock chips have no Shooting Star support at all) — X/Y/Z are 3 independent, concurrent streak slots sharing this chip's own 8-LED strip, not a separate physical output.</div>
+      <div class="note" style="margin-bottom:10px;">Now functional via the star_zone replacement firmware (stock chips have no Shooting Star support at all) — X/Y/Z are 3 independent, concurrent streak slots sharing this chip's own 16-LED strip, not a separate physical output. The last field is an <b>interval in seconds</b>, not a duration: it fires one streak now, then another every N seconds, indefinitely, until turned off - it does not run continuously for N seconds.</div>
       <div class="zone-tabs" id="ssZones">
         <button class="active" data-zone="X">SS1</button>
         <button data-zone="Y">SS2</button>
@@ -436,7 +443,7 @@
 
     <div class="panel new">
       <h2>Meteor Shower — Auto Mode <span class="badge-new">New</span></h2>
-      <div class="note new" style="margin-bottom:10px;">Randomized automatic firing on top of any manually-triggered shots above. One global mode per chip (not per-zone) with a single average interval, not a min/max/variance range.</div>
+      <div class="note new" style="margin-bottom:10px;">An extra, automatic streak generator layered on top of everything else - it does <b>not</b> use the X/Y/Z zones above (it has its own slot) and needs no color picked: each shot uses whatever color the Palette-Driven Twinkle panel has selected, or the current Starry Night color if no palette is active. Its timing is randomly jittered around the average interval below (not exactly periodic like the X/Y/Z zones), so it reads as organic background sparkle rather than a predictable per-zone shot.</div>
       <div class="row">
         <label>Avg interval</label>
         <input type="range" id="showerInterval" min="1" max="120" value="20">
@@ -530,7 +537,9 @@ const COLORS = [
 ];
 const STAR_EFFECTS = [["Twinkle","T"],["Firefly","F"],["Breeze","B"],["Random","R"],["Rain Drops","P"],["Jamboree","J"]];
 const TRANSITIONS = [["Wipe","w"],["Fade","f"],["Rainbow","r"],["Blink","b"]];
-const TIMES = [["Off","0"],["1 min","1"],["2 min","2"],["5 min","5"],["10 min","10"]];
+// Values are now a firing INTERVAL in seconds (fire one streak, then another
+// every N seconds, indefinitely), not a burst duration in minutes.
+const TIMES = [["Off","0"],["5s","5"],["15s","15"],["30s","30"],["60s","60"],["120s","120"],["300s","300"]];
 
 let port=null, writer=null, reader=null, keepReading=false;
 let bleDevice=null, bleServer=null, bleChar=null;
@@ -751,6 +760,13 @@ $("starDimSend").addEventListener("click", ()=>{
   $("starPreview").innerHTML = `<b>${cmd}</b> — star dim ${v}%`;
   send(cmd);
 });
+$("fadeSpeedMs").addEventListener("input", e => $("fadeSpeedMsVal").textContent = e.target.value);
+$("fadeSpeedSend").addEventListener("click", ()=>{
+  const v = $("fadeSpeedMs").value;
+  const cmd = `!F,${v}*`;
+  $("starPreview").innerHTML = `<b>${cmd}</b> — Wipe/Fade transition duration ${v}ms`;
+  send(cmd, true);
+});
 
 // ---- Starry Night Colors (1.0) ----
 COLORS.forEach(([name,r,g,b,w])=>{
@@ -784,7 +800,7 @@ document.querySelectorAll("#ssZones button").forEach(btn=>{
     ssZone = btn.dataset.zone;
   });
 });
-let ssTime = "1";
+let ssTime = "15";
 COLORS.forEach(([name,r,g,b,w])=>{
   const el = document.createElement("div");
   el.className = "swatch";
@@ -792,7 +808,7 @@ COLORS.forEach(([name,r,g,b,w])=>{
   el.style.cssText = swatchStyle(r,g,b,w);
   el.addEventListener("click", ()=>{
     const cmd = `${ssZone},${r},${g},${b},${w},${ssTime}*`;
-    $("ssPreview").innerHTML = `<b>${cmd}</b> — zone ${ssZone==='X'?'SS1':ssZone==='Y'?'SS2':'SS3'}, ${name}, ${ssTime==='0'?'off':ssTime+' min'}`;
+    $("ssPreview").innerHTML = `<b>${cmd}</b> — zone ${ssZone==='X'?'SS1':ssZone==='Y'?'SS2':'SS3'}, ${name}, ${ssTime==='0'?'off':'every '+ssTime+'s'}`;
     send(cmd);
   });
   $("ssColors").appendChild(el);
@@ -800,7 +816,7 @@ COLORS.forEach(([name,r,g,b,w])=>{
 TIMES.forEach(([name,code])=>{
   const b = document.createElement("button");
   b.textContent = name;
-  if(code === "1") b.classList.add("active");
+  if(code === ssTime) b.classList.add("active");
   b.addEventListener("click", ()=>{
     ssTime = code;
     document.querySelectorAll("#ssTimes button").forEach(x=>x.classList.remove("active"));

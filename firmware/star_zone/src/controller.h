@@ -28,7 +28,9 @@ class StarZoneController {
   void set_transition(ColorTransition transition);
   void set_color(const RGBW &color);
   void set_dimmer(uint8_t percent);
-  void set_shooting_star(ShootingStarZone zone, const RGBW &color, uint8_t duration_minutes);
+  // interval_seconds: 0-65535, 0 = off. Fires one streak immediately, then
+  // one more every interval_seconds until turned off - see shooting_star.h.
+  void set_shooting_star(ShootingStarZone zone, const RGBW &color, uint16_t interval_seconds);
 
   // --- Enhancement command handlers (new "!"-prefixed namespace, see
   // protocol.h - guaranteed not to collide with the legacy grammar) ---
@@ -43,6 +45,10 @@ class StarZoneController {
   // speed: 0-255, or 256+ (any out-of-range value) to clear the override
   // and fall back to the shared "!S" effect speed.
   void set_shooting_star_config(ShootingStarZone zone, uint8_t trail_pixels, uint16_t speed);
+  // How long the Wipe/Fade color transitions ('w'/'f') take to complete,
+  // clamped to [50,10000]ms. Applies to both - Wipe and Fade differ in how
+  // they use this duration (see compute_active_color_), not in duration.
+  void set_color_transition_speed(uint16_t ms);
 
  private:
   RGBW compute_active_color_(uint8_t pixel_index, uint32_t now_ms) const;
@@ -71,7 +77,7 @@ class StarZoneController {
   // Color-transition animation state (drives compute_active_color_).
   RGBW transition_from_{0, 0, 0, 0};
   uint32_t transition_started_ms_{0};
-  static constexpr uint16_t kColorTransitionMs = 700;
+  uint16_t color_transition_ms_{700};  // configurable via "!F", see set_color_transition_speed
 
   // One independent shooting-star slot per zone (X/Y/Z).
   ShootingStarSlot shooting_star_[kShootingStarZoneCount]{};

@@ -41,9 +41,9 @@ void StarZoneController::set_dimmer(uint8_t percent) {
   dimmer_pct_ = constrain(percent, kDimmerMinPct, kDimmerMaxPct);
 }
 
-void StarZoneController::set_shooting_star(ShootingStarZone zone, const RGBW &color, uint8_t duration_minutes) {
+void StarZoneController::set_shooting_star(ShootingStarZone zone, const RGBW &color, uint16_t interval_seconds) {
   wake_();
-  shooting_star::start(shooting_star_[(uint8_t) zone], color, duration_minutes, millis());
+  shooting_star::start(shooting_star_[(uint8_t) zone], color, interval_seconds, millis());
 }
 
 void StarZoneController::set_shooting_star_config(ShootingStarZone zone, uint8_t trail_pixels, uint16_t speed) {
@@ -51,6 +51,11 @@ void StarZoneController::set_shooting_star_config(ShootingStarZone zone, uint8_t
   ShootingStarSlot &slot = shooting_star_[(uint8_t) zone];
   slot.trail_pixels = (float) (trail_pixels < 1 ? 1 : (trail_pixels > 40 ? 40 : trail_pixels));
   slot.speed_override = speed > 255 ? -1 : (int16_t) speed;
+}
+
+void StarZoneController::set_color_transition_speed(uint16_t ms) {
+  wake_();
+  color_transition_ms_ = ms < 50 ? 50 : (ms > 10000 ? 10000 : ms);
 }
 
 void StarZoneController::set_master_brightness(uint8_t percent) {
@@ -104,24 +109,24 @@ RGBW StarZoneController::compute_active_color_(uint8_t pixel_index, uint32_t now
       return color_;
     case ColorTransition::FADE: {
       uint32_t elapsed = now_ms - transition_started_ms_;
-      if (elapsed >= kColorTransitionMs) return color_;
-      uint8_t t = (uint8_t) ((elapsed * 255UL) / kColorTransitionMs);
+      if (elapsed >= color_transition_ms_) return color_;
+      uint8_t t = (uint8_t) ((elapsed * 255UL) / color_transition_ms_);
       return color_utils::lerp(transition_from_, color_, t);
     }
     case ColorTransition::WIPE: {
       uint32_t elapsed = now_ms - transition_started_ms_;
-      if (elapsed >= kColorTransitionMs) return color_;
-      float progress = (float) elapsed / kColorTransitionMs;
+      if (elapsed >= color_transition_ms_) return color_;
+      float progress = (float) elapsed / color_transition_ms_;
       float boundary = progress * kLedCount;
       return pixel_index < boundary ? color_ : transition_from_;
     }
     case ColorTransition::RAINBOW: {
-      uint16_t period_ms = map(effect_speed_, 0, 255, 8000, 800);
+      uint16_t period_ms = map(effect_speed_, 0, 255, 14000, 800);
       uint8_t hue = (uint8_t) (((now_ms % period_ms) * 255UL / period_ms) + pixel_index * (255 / kLedCount));
       return color_utils::hue_to_rgb(hue);
     }
     case ColorTransition::BLINK: {
-      uint16_t period_ms = map(effect_speed_, 0, 255, 1600, 200);
+      uint16_t period_ms = map(effect_speed_, 0, 255, 3000, 200);
       bool on = (now_ms % period_ms) < (period_ms / 2);
       return on ? color_ : RGBW{0, 0, 0, 0};
     }
@@ -134,7 +139,7 @@ void StarZoneController::maybe_fire_meteor_(uint32_t now_ms) {
   if ((int32_t) (now_ms - meteor_next_fire_ms_) < 0) return;
   RGBW color = palette_id_ != palette::kSolidPaletteId ? palette::sample(palette_id_, (uint8_t) random(0, 256))
                                                          : color_;
-  shooting_star::start(meteor_slot_, color, /*duration_minutes=*/0, now_ms, /*single_shot=*/true);
+  shooting_star::start(meteor_slot_, color, /*interval_seconds=*/0, now_ms, /*single_shot=*/true);
   meteor_next_fire_ms_ = now_ms + random(500, (uint32_t) meteor_shower_interval_s_ * 1000UL + 500);
 }
 

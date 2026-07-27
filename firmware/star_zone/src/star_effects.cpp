@@ -30,7 +30,7 @@ uint8_t triangle(uint32_t t, uint16_t period) {
 
 void render_twinkle(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed, const RGBW *active_color,
                      uint8_t palette_id) {
-  uint16_t base_period = map(speed, 0, 255, 2200, 500);
+  uint16_t base_period = map(speed, 0, 255, 4000, 500);
   for (uint8_t i = 0; i < count; i++) {
     uint16_t period = base_period + (color_utils::hash8(i, 0) % 400);
     uint32_t offset = color_utils::hash8(i, 1) * 7UL;
@@ -42,7 +42,7 @@ void render_twinkle(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed,
 void render_firefly(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed, const RGBW *active_color,
                      uint8_t palette_id) {
   // Slower, gentler than Twinkle, and only a subset of pixels glow at once.
-  uint16_t base_period = map(speed, 0, 255, 5000, 1500);
+  uint16_t base_period = map(speed, 0, 255, 9000, 1500);
   for (uint8_t i = 0; i < count; i++) {
     uint16_t period = base_period + (color_utils::hash8(i, 2) % 1500);
     uint32_t offset = color_utils::hash8(i, 3) * 23UL;
@@ -55,7 +55,7 @@ void render_firefly(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed,
 void render_breeze(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed, const RGBW *active_color,
                     uint8_t palette_id) {
   // A brightness wave sweeps across the strip like wind moving through it.
-  float period_s = map(speed, 0, 255, 6000, 1200) / 1000.0f;
+  float period_s = map(speed, 0, 255, 11000, 1200) / 1000.0f;
   float t = now_ms / 1000.0f;
   for (uint8_t i = 0; i < count; i++) {
     float x = (float) i / count;
@@ -66,7 +66,7 @@ void render_breeze(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed, 
 }
 
 void render_random(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed, uint8_t /*palette_id*/) {
-  uint16_t change_interval = map(speed, 0, 255, 2200, 300);
+  uint16_t change_interval = map(speed, 0, 255, 4000, 300);
   for (uint8_t i = 0; i < count; i++) {
     uint32_t bucket = now_ms / change_interval;
     uint8_t hue = color_utils::hash8(i, (uint16_t) bucket);
@@ -77,7 +77,7 @@ void render_random(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed, 
 void render_rain_drops(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed, const RGBW *active_color,
                         uint8_t palette_id) {
   // Sharp attack, fast decay per pixel - a "drop" landing then fading.
-  uint16_t change_interval = map(speed, 0, 255, 1400, 250);
+  uint16_t change_interval = map(speed, 0, 255, 2600, 250);
   constexpr uint16_t kDecayMs = 260;
   for (uint8_t i = 0; i < count; i++) {
     uint32_t bucket = now_ms / change_interval;
@@ -94,8 +94,8 @@ void render_jamboree(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed
                       uint8_t palette_id) {
   // The energetic one: fast hue rotation across the strip plus twinkle-style
   // sparkle on top.
-  uint16_t hue_period = map(speed, 0, 255, 3000, 600);
-  uint16_t sparkle_period = map(speed, 0, 255, 900, 250);
+  uint16_t hue_period = map(speed, 0, 255, 5500, 600);
+  uint16_t sparkle_period = map(speed, 0, 255, 1600, 250);
   for (uint8_t i = 0; i < count; i++) {
     uint8_t hue = (uint8_t) (((now_ms % hue_period) * 255UL / hue_period) + i * (255 / count));
     RGBW base = palette_id != palette::kSolidPaletteId ? source_color(i, now_ms, active_color, palette_id)

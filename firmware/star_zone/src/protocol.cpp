@@ -129,8 +129,7 @@ void dispatch_legacy(const char *cmd, StarZoneController &controller) {
         return;
       ShootingStarZone zone =
           head == 'X' ? ShootingStarZone::ZONE_X : (head == 'Y' ? ShootingStarZone::ZONE_Y : ShootingStarZone::ZONE_Z);
-      controller.set_shooting_star(zone, RGBW{(uint8_t) f[0], (uint8_t) f[1], (uint8_t) f[2], (uint8_t) f[3]},
-                                    (uint8_t) f[4]);
+      controller.set_shooting_star(zone, RGBW{(uint8_t) f[0], (uint8_t) f[1], (uint8_t) f[2], (uint8_t) f[3]}, f[4]);
       return;
     }
     default:
@@ -186,6 +185,9 @@ void dispatch_enhancement(const char *cmd, uint8_t len, StarZoneController &cont
       controller.set_shooting_star_config(zone, (uint8_t) f[0], speed);
       return;
     }
+    case 'F':
+      if (read_field(p, f[0])) controller.set_color_transition_speed(f[0]);
+      return;
     default:
       return;
   }
@@ -199,14 +201,22 @@ void poll(Stream &serial, StarZoneController &controller) {
 
     // A dropped/corrupted byte (e.g. marginal UART signal integrity - see
     // the "Top-Star reception" write-up in the root README) can leave a
-    // buffered command without its terminator. Without this check, every
-    // byte of the *next*, perfectly legitimate command would just get
+    // buffered LEGACY command without its terminator. Without this check,
+    // every byte of the *next*, perfectly legitimate command would just get
     // appended as if it were more of the stale one, silently eating it too,
-    // all the way until the buffer overflowed. None of R/G/B/W/dimmer/
-    // duration/enhancement fields are ever letters, so a command-start byte
-    // arriving mid-buffer can only mean the previous command desynced -
-    // abandon it and start fresh instead of appending.
-    if (buf_len > 0 && is_command_start(c)) buf_len = 0;
+    // all the way until the buffer overflowed. None of the legacy grammar's
+    // R/G/B/W/dimmer/duration fields are ever letters, so a command-start
+    // byte arriving mid-buffer can only mean the previous legacy command
+    // desynced - abandon it and start fresh instead of appending.
+    //
+    // Restricted to buf[0] != '!' (i.e. only while buffering a legacy
+    // command): enhancement commands legitimately contain letters as field
+    // values - e.g. "!L,X,8,200*"'s zone field - and applying this same
+    // resync there would misfire on that 'X' and truncate/eat the
+    // enhancement command it's actually part of. (Found via real hardware
+    // testing: "!L,X,..." trail-length commands were being silently
+    // dropped/mangled by exactly this.)
+    if (buf_len > 0 && buf[0] != '!' && is_command_start(c)) buf_len = 0;
 
     if (buf_len == 0) {
       StarryEffect effect;

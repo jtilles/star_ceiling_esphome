@@ -8,7 +8,17 @@
 //   'w'/'f'/'r'/'b'                - color transition select (immediate, no terminator)
 //   'c',R,G,B,W*                   - set starry color
 //   'D',pct*                       - star dimmer (10-100)
-//   'X'|'Y'|'Z',R,G,B,W,minutes*   - shooting star zone (minutes: 0=off,1,2,5,10)
+//   'X'|'Y'|'Z',R,G,B,W,interval_s* - shooting star zone: fires one streak,
+//                                    then one more every interval_s seconds
+//                                    (0-65535) until turned off with
+//                                    interval_s=0. Diverges from
+//                                    illuminate_protocol.h's
+//                                    ShootingStarDuration (which sends
+//                                    0/1/2/5/10 meaning *minutes of
+//                                    continuous firing*) based on real
+//                                    bench-test feedback - see
+//                                    shooting_star.h and
+//                                    firmware/star_zone/README.md.
 //
 // New enhancement grammar, namespaced under a leading '!' so it can never
 // collide with the legacy grammar above (which only ever starts a command
@@ -26,6 +36,8 @@
 //                                    clamped 1-40) and optional speed
 //                                    override (0-255; omit, or send 256+,
 //                                    to fall back to the shared '!S' speed)
+//   '!F',ms*                       - Wipe/Fade color transition duration
+//                                    (50-10000ms, clamped)
 //
 // The undocumented 'O' single-byte command the original firmware's
 // dispatcher accepts (docs/illuminate-firmware-notes.md's "Undocumented"
