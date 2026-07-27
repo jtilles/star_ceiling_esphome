@@ -25,7 +25,7 @@ set. This project replaces just those two zone chips with firmware that:
 - Adds **working Shooting Star** (`X`/`Y`/`Z` zone commands — silently
   ignored by the stock chip, fully implemented here).
 - Adds a small set of enhancements from `docs/illuminate-enhanced-prd.md`,
-  scoped to what makes sense on a single 8-LED zone strip: master
+  scoped to what makes sense on a single 16-LED zone strip: master
   brightness, per-effect speed, smooth on/off, an identify/install mode, a
   palette-driven twinkle mode, and a meteor-shower auto-fire mode for
   Shooting Star.
@@ -36,7 +36,7 @@ The strip stays fully off from power-on until the first command of any kind
 is received (`StarZoneController::booted_dark_` in `controller.h`/`.cpp`).
 Earlier versions rendered the default Twinkle effect immediately at boot,
 which looked like an unprompted, roughly-synchronized "blinking heartbeat"
-across all 8 LEDs before anything had actually been commanded — not useful
+across all the LEDs before anything had actually been commanded — not useful
 behavior for a controller that's supposed to reflect the last command it was
 given.
 

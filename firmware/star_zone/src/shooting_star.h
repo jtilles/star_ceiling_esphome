@@ -14,7 +14,7 @@
 // repeating meteor streaks across this chip's LED strip until its duration
 // elapses (or it's cancelled with time=0) - matching the PRD's "simultaneous
 // multi-streak support" enhancement, scoped down to the 3 named zones
-// sharing one physical 8-LED strip instead of a merged Top+Bottom array.
+// sharing one physical 16-LED strip instead of a merged Top+Bottom array.
 #pragma once
 
 #include "config.h"

@@ -17,10 +17,13 @@ namespace star_zone {
 // both Top-Star and Bot-Star (docs/illuminate-hardware-notes.md).
 constexpr uint8_t kLedDataPin = 6;
 
-// Each zone (top row / bottom row) drives 8 LEDs
-// (docs/illuminate-enhanced-pinmap.md: "Top row and Bottom row (8 LEDs
-// each)").
-constexpr uint16_t kLedCount = 8;
+// Each zone (top row / bottom row) drives 16 LEDs, wired in series on one
+// data line (extended from the stock board's 8-LED-per-zone baseline - see
+// docs/illuminate-enhanced-pinmap.md: "Top row and Bottom row (8 LEDs
+// each)"). Every array/loop in this firmware is sized off this constant, so
+// changing it is sufficient on the software side; the LED count itself is
+// otherwise just a physical wiring/power-budget fact about the strip.
+constexpr uint16_t kLedCount = 16;
 
 // VERIFY: the original protocol carries 4-channel RGBW colors (see
 // components/illuminate/illuminate_protocol.h), which is why this firmware
