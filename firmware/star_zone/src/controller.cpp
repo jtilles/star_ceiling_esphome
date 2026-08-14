@@ -1,6 +1,7 @@
 #include "controller.h"
 
 #include <Arduino.h>
+#include <EEPROM.h>
 
 #include "color_utils.h"
 #include "palette.h"
@@ -10,23 +11,27 @@ namespace star_zone {
 
 void StarZoneController::begin() {
   strip_.begin();
-  strip_.show();  // all off until the first command/frame
+  strip_.show();  // all off until the first command/frame, or until
+                   // load_persisted_state_() finds a valid saved state
   // ADC6 (Arduino A6) is a confirmed always-NC, analog-only pin on this
   // package (docs/illuminate-hardware-notes.md) - a floating pin's noise is
   // a convenient entropy source, mirroring the original firmware's own
   // ADC-based randomSeed()-style read (docs/illuminate-firmware-notes.md,
   // "Animation engine").
   randomSeed(analogRead(A6));
+  load_persisted_state_();
 }
 
 void StarZoneController::set_effect(StarryEffect effect) {
   wake_();
   effect_ = effect;
+  mark_dirty_();
 }
 
 void StarZoneController::set_transition(ColorTransition transition) {
   wake_();
   transition_ = transition;
+  mark_dirty_();
 }
 
 void StarZoneController::set_color(const RGBW &color) {
@@ -34,11 +39,13 @@ void StarZoneController::set_color(const RGBW &color) {
   transition_from_ = color_;
   color_ = color;
   transition_started_ms_ = millis();
+  mark_dirty_();
 }
 
 void StarZoneController::set_dimmer(uint8_t percent) {
   wake_();
   dimmer_pct_ = constrain(percent, kDimmerMinPct, kDimmerMaxPct);
+  mark_dirty_();
 }
 
 void StarZoneController::set_shooting_star(ShootingStarZone zone, const RGBW &color, uint16_t interval_seconds) {
@@ -46,26 +53,33 @@ void StarZoneController::set_shooting_star(ShootingStarZone zone, const RGBW &co
   shooting_star::start(shooting_star_[(uint8_t) zone], color, interval_seconds, millis());
 }
 
-void StarZoneController::set_shooting_star_config(ShootingStarZone zone, uint8_t trail_pixels, uint16_t speed) {
+void StarZoneController::set_shooting_star_config(ShootingStarZone zone, uint8_t trail_pixels, uint16_t speed,
+                                                    uint16_t decay_x100) {
   wake_();
   ShootingStarSlot &slot = shooting_star_[(uint8_t) zone];
   slot.trail_pixels = (float) (trail_pixels < 1 ? 1 : (trail_pixels > 40 ? 40 : trail_pixels));
   slot.speed_override = speed > 255 ? -1 : (int16_t) speed;
+  uint16_t decay_clamped = decay_x100 < 10 ? 10 : (decay_x100 > 500 ? 500 : decay_x100);
+  slot.decay_exponent = decay_clamped / 100.0f;
+  mark_dirty_();
 }
 
 void StarZoneController::set_color_transition_speed(uint16_t ms) {
   wake_();
   color_transition_ms_ = ms < 50 ? 50 : (ms > 10000 ? 10000 : ms);
+  mark_dirty_();
 }
 
 void StarZoneController::set_master_brightness(uint8_t percent) {
   wake_();
   master_brightness_pct_ = percent > 100 ? 100 : percent;
+  mark_dirty_();
 }
 
 void StarZoneController::set_effect_speed(uint8_t speed) {
   wake_();
   effect_speed_ = speed;
+  mark_dirty_();
 }
 
 void StarZoneController::set_power(bool on, uint16_t transition_ms) {
@@ -75,6 +89,7 @@ void StarZoneController::set_power(bool on, uint16_t transition_ms) {
   power_level_start_ = power_level_;  // interrupts any transition already in flight
   power_level_target_ = on ? 1.0f : 0.0f;
   power_transition_started_ms_ = millis();
+  mark_dirty_();
 }
 
 void StarZoneController::set_identify_mode(bool active) {
@@ -94,6 +109,7 @@ void StarZoneController::identify_step(int8_t delta) {
 void StarZoneController::set_palette(uint8_t palette_id) {
   wake_();
   palette_id_ = palette_id > palette::kPaletteCount ? palette::kSolidPaletteId : palette_id;
+  mark_dirty_();
 }
 
 void StarZoneController::set_meteor_shower(bool active, uint16_t avg_interval_s) {
@@ -143,7 +159,73 @@ void StarZoneController::maybe_fire_meteor_(uint32_t now_ms) {
   meteor_next_fire_ms_ = now_ms + random(500, (uint32_t) meteor_shower_interval_s_ * 1000UL + 500);
 }
 
-void StarZoneController::tick(uint32_t now_ms) { render_(now_ms); }
+void StarZoneController::tick(uint32_t now_ms) {
+  render_(now_ms);
+  if (state_dirty_ && (now_ms - last_state_change_ms_) >= kPersistDebounceMs) {
+    save_persisted_state_();
+    state_dirty_ = false;
+  }
+}
+
+void StarZoneController::load_persisted_state_() {
+  PersistedState saved;
+  EEPROM.get(0, saved);
+  // Blank/erased EEPROM (reads as 0xFF per byte), a chip that's never saved
+  // anything, or a stale layout from an older firmware version - in any of
+  // those cases there's nothing valid to restore, so leave every field at
+  // its normal power-on default and booted_dark_ stays true as before.
+  if (saved.magic != kPersistMagic || saved.version != kPersistVersion) return;
+
+  effect_ = (StarryEffect) saved.effect;
+  transition_ = (ColorTransition) saved.transition;
+  color_ = RGBW{saved.color_r, saved.color_g, saved.color_b, saved.color_w};
+  transition_from_ = color_;  // no in-flight transition to resume across a power cycle
+  dimmer_pct_ = saved.dimmer_pct;
+  color_transition_ms_ = saved.color_transition_ms;
+  master_brightness_pct_ = saved.master_brightness_pct;
+  effect_speed_ = saved.effect_speed;
+  power_on_ = saved.power_on != 0;
+  // Resume instantly at the restored on/off state - no fade-in/out, that's
+  // only meaningful for a live "!O" toggle, not a power-cycle restore.
+  power_level_ = power_level_start_ = power_level_target_ = power_on_ ? 1.0f : 0.0f;
+  palette_id_ = saved.palette_id;
+  for (uint8_t i = 0; i < kShootingStarZoneCount; i++) {
+    shooting_star_[i].trail_pixels = (float) saved.trail_pixels[i];
+    shooting_star_[i].speed_override = saved.speed_override[i];
+    shooting_star_[i].decay_exponent = saved.decay_x100[i] / 100.0f;
+  }
+  // Valid saved state - render it immediately instead of waiting for the
+  // first serial command, which is the whole point of this feature.
+  booted_dark_ = false;
+}
+
+void StarZoneController::save_persisted_state_() {
+  PersistedState state;
+  state.magic = kPersistMagic;
+  state.version = kPersistVersion;
+  state.effect = (uint8_t) effect_;
+  state.transition = (uint8_t) transition_;
+  state.color_r = color_.r;
+  state.color_g = color_.g;
+  state.color_b = color_.b;
+  state.color_w = color_.w;
+  state.dimmer_pct = dimmer_pct_;
+  state.color_transition_ms = color_transition_ms_;
+  state.master_brightness_pct = master_brightness_pct_;
+  state.effect_speed = effect_speed_;
+  state.power_on = power_on_ ? 1 : 0;
+  state.palette_id = palette_id_;
+  for (uint8_t i = 0; i < kShootingStarZoneCount; i++) {
+    state.trail_pixels[i] = (uint8_t) shooting_star_[i].trail_pixels;
+    state.speed_override[i] = shooting_star_[i].speed_override;
+    state.decay_x100[i] = (uint16_t) (shooting_star_[i].decay_exponent * 100.0f);
+  }
+  // EEPROM.put() writes byte-by-byte via EEPROM.update() under the hood
+  // (Arduino AVR core), which skips any byte that already holds the value
+  // being written - so this is wear-safe even though it's called on every
+  // debounced save rather than diffing ourselves first.
+  EEPROM.put(0, state);
+}
 
 void StarZoneController::render_(uint32_t now_ms) {
   if (booted_dark_) {

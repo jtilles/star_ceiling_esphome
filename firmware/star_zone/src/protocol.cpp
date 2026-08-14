@@ -182,7 +182,9 @@ void dispatch_enhancement(const char *cmd, uint8_t len, StarZoneController &cont
       if (!read_zone(p, zone) || !read_field(p, f[0])) return;
       uint16_t speed = 256;         // out-of-range sentinel: no speed field given
       read_field(p, speed);         // optional - falls back to the shared "!S" speed
-      controller.set_shooting_star_config(zone, (uint8_t) f[0], speed);
+      uint16_t decay = 100;         // 100 = exponent 1.00 = original linear falloff
+      read_field(p, decay);         // optional - falls back to linear falloff
+      controller.set_shooting_star_config(zone, (uint8_t) f[0], speed, decay);
       return;
     }
     case 'F':

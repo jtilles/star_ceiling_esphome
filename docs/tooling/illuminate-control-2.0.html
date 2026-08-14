@@ -206,6 +206,7 @@
       <div class="sub">Manual override + test bench — original RS232 command set plus the star_zone replacement firmware's enhancement commands</div>
     </div>
     <div class="status-line">
+      <button class="danger" id="quickPowerOff" title="!O,0,300* — true blackout, independent of effect/color/palette. This is the answer to &quot;color=black doesn't turn Random/Jamboree off&quot;: those two effects ignore the commanded color entirely by design (see their notes below), but this command overrides every effect's output, always.">⏻ Power Off</button>
       <div class="dot" id="statusDot"></div>
       <span id="statusText">Disconnected</span>
     </div>
@@ -271,10 +272,12 @@
       <code>*</code>) — see <code>firmware/star_zone/README.md</code>'s command grammar table. This console targets
       the real, implemented <code>star_zone</code> firmware for the Top-Star/Bot-Star zone chips specifically (each
       chip drives its own independent 8-LED strip) — <strong>not</strong> the original Illuminate Enhanced PRD's
-      abandoned single-merged-MCU design, so a few PRD-only ideas that never got built (custom shooting-star trail
-      length/streak count, per-effect speed codes, custom palette definitions, Perlin-noise ambient, identify
-      output/count/dwell, per-zone/min-max-variance meteor showers) have been dropped below rather than left
-      sending commands the firmware doesn't understand.
+      abandoned single-merged-MCU design, so a few PRD-only ideas that never got built (multiple concurrent
+      streaks per shooting-star zone, per-effect speed codes, custom palette definitions, Perlin-noise ambient,
+      identify output/count/dwell, per-zone/min-max-variance meteor showers) have been dropped below rather than
+      left sending commands the firmware doesn't understand. (Custom shooting-star trail length, once on that
+      dropped list, was later actually implemented as <code>!L</code> — see the Shooting Star — Trail &amp; Speed
+      panel below.)
     </div>
   </div>
 
@@ -284,6 +287,7 @@
 
     <div class="panel">
       <h2>Starry Night — Effects</h2>
+      <div class="note" style="margin-bottom:10px;">Random ignores the commanded color entirely (it generates its own per-pixel hue); Jamboree does too unless a palette is active below. Setting color to black will not turn either of these off — use the <b>⏻ Power Off</b> button at the top of the page instead, which overrides every effect's output.</div>
       <div class="effects" id="starEffects"></div>
       <div class="row" style="margin-top:14px;">
         <label>Transition</label>
@@ -308,6 +312,10 @@
     <div class="panel">
       <h2>Starry Night — Colors</h2>
       <div class="swatches" id="starColors"></div>
+      <div class="row" style="margin-top:10px;">
+        <button class="danger" id="starOff">Off / Black</button>
+        <button id="starOverflowTest">Overflow test (300→wrap)</button>
+      </div>
       <div class="row" style="margin-top:14px;">
         <label>Custom</label>
         <input type="color" id="starCustomColor" value="#ff0000">
@@ -331,6 +339,9 @@
       <div class="row" style="margin-top:14px;">
         <label>Interval</label>
         <div class="effects" id="ssTimes"></div>
+      </div>
+      <div class="row note" style="margin-top:6px;">
+        1 / 2 / 10 are included so the same wire byte can also test the legacy Illuminate 1.0 <code>ShootingStarDuration</code> enum {0,1,2,5,10} <b>minutes</b> against real SS-firmware hardware — star_zone reads this byte as seconds, SS-firmware reads it as one of five duration steps. Same command, different firmware interpretation.
       </div>
       <div class="row">
         <button class="danger" id="ssOff">Turn zone off</button>
@@ -436,6 +447,12 @@
         <span class="note new">unchecked = use shared Effect Speed</span>
       </div>
       <div class="row">
+        <label>Decay</label>
+        <input type="range" id="ssConfigDecay" min="10" max="500" value="100">
+        <span class="val" id="ssConfigDecayVal">100</span>
+        <span class="note new">÷100 = exponent — 100 = linear (original); higher = shorter/steeper glow; lower = more gradual</span>
+      </div>
+      <div class="row">
         <button class="primary" id="ssConfigSend">Set</button>
       </div>
       <div class="cmd-preview new" id="ssConfigPreview">—</div>
@@ -446,9 +463,13 @@
       <div class="note new" style="margin-bottom:10px;">An extra, automatic streak generator layered on top of everything else - it does <b>not</b> use the X/Y/Z zones above (it has its own slot) and needs no color picked: each shot uses whatever color the Palette-Driven Twinkle panel has selected, or the current Starry Night color if no palette is active. Its timing is randomly jittered around the average interval below (not exactly periodic like the X/Y/Z zones), so it reads as organic background sparkle rather than a predictable per-zone shot.</div>
       <div class="row">
         <label>Avg interval</label>
-        <input type="range" id="showerInterval" min="1" max="120" value="20">
-        <span class="val" id="showerIntervalVal">20</span>
-        <span class="note new">seconds</span>
+        <input type="range" id="showerInterval" min="0" max="120" value="20">
+        <input type="number" id="showerIntervalNum" min="0" max="65535" step="1" value="20" style="width:80px;">
+        <span class="note new">seconds — 0 tests the firmware's 0→1 coercion; no upper limit (slider tops out at 120, type a larger value here)</span>
+      </div>
+      <div class="row">
+        <input type="checkbox" id="showerIntervalOmit" style="width:auto;">
+        <label style="min-width:auto;">Omit interval field (test firmware's 20s default)</label>
       </div>
       <div class="row">
         <button class="primary" id="showerStart">Start Shower</button>
@@ -492,8 +513,12 @@
       <div class="row">
         <label>Duration</label>
         <input type="range" id="fadeDuration" min="100" max="5000" step="100" value="1200">
-        <span class="val" id="fadeDurationVal">1200</span>
-        <span class="note new">ms</span>
+        <input type="number" id="fadeDurationNum" min="0" max="65535" step="1" value="1200" style="width:80px;">
+        <span class="note new">ms (no firmware upper limit — slider tops out at 5000, type a larger value here)</span>
+      </div>
+      <div class="row">
+        <input type="checkbox" id="fadeDurationOmit" style="width:auto;">
+        <label style="min-width:auto;">Omit duration field (test firmware's 500ms default)</label>
       </div>
       <div class="row">
         <button class="primary" id="fadeOn">Fade On</button>
@@ -514,6 +539,23 @@
       Sent exactly as typed — no character is appended automatically. Doubles as the "raw passthrough / escape hatch"
       called out in the PRD for exercising firmware commands before they're modeled as first-class controls above.
     </div>
+  </div>
+
+  <div class="panel new">
+    <h2>Diagnostics <span class="badge-new">New</span></h2>
+    <div class="note new" style="margin-bottom:10px;">
+      Regression tests for the serial parser's "resync on stray command-start byte" logic (<code>protocol.cpp</code>'s <code>poll()</code>) — this exact class of bug caused a real incident where a misparsed command fired a shooting star for ~4 hours. Each button below sends one raw write with no separator between the fragments, to exercise the byte-stream parser directly rather than one full command at a time.
+    </div>
+    <div class="row">
+      <button id="diagResyncLegacy">Legacy resync: incomplete c + D,50*</button>
+    </div>
+    <div class="note new" style="margin-top:6px;">
+      Expected: only <code>D,50*</code> (star dim → 50%) takes effect; the incomplete <code>c,1,2</code> fragment is silently dropped, not corrupt-parsed.
+    </div>
+    <div class="note new" style="margin-top:10px;">
+      The other historically-real bug — resync incorrectly firing <i>inside</i> a <code>!</code>-prefixed command when a field's letter value (e.g. zone <code>X</code>/<code>Y</code>/<code>Z</code>) collides with a legacy command-start byte — is already exercised by the <b>Shooting Star — Trail &amp; Speed</b> panel above whenever zone X is selected (its wire command is <code>!L,X,...*</code>, and <code>X</code> is itself a legacy command-start byte). No separate control needed here; just include that panel with zone X selected in any regression pass.
+    </div>
+    <div class="cmd-preview new" id="diagPreview">—</div>
   </div>
 
   <div class="panel">
@@ -537,9 +579,12 @@ const COLORS = [
 ];
 const STAR_EFFECTS = [["Twinkle","T"],["Firefly","F"],["Breeze","B"],["Random","R"],["Rain Drops","P"],["Jamboree","J"]];
 const TRANSITIONS = [["Wipe","w"],["Fade","f"],["Rainbow","r"],["Blink","b"]];
-// Values are now a firing INTERVAL in seconds (fire one streak, then another
-// every N seconds, indefinitely), not a burst duration in minutes.
-const TIMES = [["Off","0"],["5s","5"],["15s","15"],["30s","30"],["60s","60"],["120s","120"],["300s","300"]];
+// Values are a firing INTERVAL in seconds on star_zone (fire one streak, then
+// another every N seconds, indefinitely), not a burst duration in minutes.
+// 1/2/10 are included specifically so the same wire byte can also exercise
+// the legacy Illuminate 1.0 ShootingStarDuration enum {0,1,2,5,10} minutes
+// on real SS-firmware hardware — see the note under this control.
+const TIMES = [["Off","0"],["1","1"],["2","2"],["5s","5"],["10","10"],["15s","15"],["30s","30"],["60s","60"],["120s","120"],["300s","300"]];
 
 let port=null, writer=null, reader=null, keepReading=false;
 let bleDevice=null, bleServer=null, bleChar=null;
@@ -566,6 +611,20 @@ function swatchStyle(r,g,b,w){
 
 function hexToRgb(hex){
   return [parseInt(hex.substr(1,2),16), parseInt(hex.substr(3,2),16), parseInt(hex.substr(5,2),16)];
+}
+
+// Keeps a <input type=range> and a <input type=number> showing/editing the same
+// value. The number input is authoritative for what actually gets sent — it has
+// no upper bound, so it can exercise firmware ranges wider than the slider (e.g.
+// !O/!W have no upper clamp in firmware but the sliders are capped for usability).
+function linkRangeNumber(rangeId, numberId){
+  const range = $(rangeId), num = $(numberId);
+  range.addEventListener("input", () => { num.value = range.value; });
+  num.addEventListener("input", () => {
+    if(num.value === "") return;
+    const v = Number(num.value);
+    range.value = Math.max(Number(range.min), Math.min(Number(range.max), v));
+  });
 }
 
 async function send(cmd, isNew){
@@ -641,6 +700,15 @@ async function disconnect(){
 
 $("connectBtn").addEventListener("click", connect);
 $("disconnectBtn").addEventListener("click", disconnect);
+
+// ---- Quick Power Off (header) ----
+// True blackout regardless of effect - unlike setting color to black, which
+// Random and Jamboree (with no palette) both ignore by design (they compute
+// their own colors and never read the commanded `c`/`!C` state). !O is a
+// post-render output multiplier, so nothing can bypass it.
+$("quickPowerOff").addEventListener("click", ()=>{
+  send("!O,0,300*", true);
+});
 
 if(!("serial" in navigator)){
   $("connectBtn").disabled = true;
@@ -790,6 +858,16 @@ $("starCustomSend").addEventListener("click", ()=>{
   $("starColorPreview").innerHTML = `<b>${cmd}</b> — custom`;
   send(cmd);
 });
+$("starOff").addEventListener("click", ()=>{
+  const cmd = `c,0,0,0,0*`;
+  $("starColorPreview").innerHTML = `<b>${cmd}</b> — off / black`;
+  send(cmd);
+});
+$("starOverflowTest").addEventListener("click", ()=>{
+  const cmd = `c,300,0,0,0*`;
+  $("starColorPreview").innerHTML = `<b>${cmd}</b> — 8-bit overflow test (c,* channels are not clamped — e.g. 300 silently wraps to 44, unlike D/!M/!L/!F which all clamp)`;
+  send(cmd);
+});
 
 // ---- Shooting Star (1.0) ----
 let ssZone = "X";
@@ -916,21 +994,28 @@ document.querySelectorAll("#ssConfigZones button").forEach(btn=>{
 $("ssConfigTrail").addEventListener("input", e => $("ssConfigTrailVal").textContent = e.target.value);
 $("ssConfigSpeed").addEventListener("input", e => $("ssConfigSpeedVal").textContent = e.target.value);
 $("ssConfigSpeedEnabled").addEventListener("change", e => $("ssConfigSpeed").disabled = !e.target.checked);
+$("ssConfigDecay").addEventListener("input", e => $("ssConfigDecayVal").textContent = e.target.value);
 $("ssConfigSend").addEventListener("click", ()=>{
   const trail = $("ssConfigTrail").value;
   const speedEnabled = $("ssConfigSpeedEnabled").checked;
-  const speed = $("ssConfigSpeed").value;
-  const cmd = speedEnabled ? `!L,${ssConfigZone},${trail},${speed}*` : `!L,${ssConfigZone},${trail}*`;
-  $("ssConfigPreview").innerHTML = `<b>${cmd}</b> — zone ${ssConfigZone}, trail ${trail}px${speedEnabled ? `, speed ${speed}` : ", shared speed"}`;
+  const speed = speedEnabled ? $("ssConfigSpeed").value : 256;
+  const decay = $("ssConfigDecay").value;
+  const cmd = `!L,${ssConfigZone},${trail},${speed},${decay}*`;
+  $("ssConfigPreview").innerHTML = `<b>${cmd}</b> — zone ${ssConfigZone}, trail ${trail}px${speedEnabled ? `, speed ${speed}` : ", shared speed"}, decay ${(decay/100).toFixed(2)}`;
   send(cmd, true);
 });
 
 // ---- Meteor Shower Auto Mode ----
-$("showerInterval").addEventListener("input", e => $("showerIntervalVal").textContent = e.target.value);
+linkRangeNumber("showerInterval", "showerIntervalNum");
+$("showerIntervalOmit").addEventListener("change", e => {
+  $("showerInterval").disabled = e.target.checked;
+  $("showerIntervalNum").disabled = e.target.checked;
+});
 $("showerStart").addEventListener("click", ()=>{
-  const interval = $("showerInterval").value;
-  const cmd = `!W,1,${interval}*`;
-  $("showerPreview").innerHTML = `<b>${cmd}</b> — shower on, ~${interval}s avg interval`;
+  const omit = $("showerIntervalOmit").checked;
+  const interval = $("showerIntervalNum").value;
+  const cmd = omit ? `!W,1*` : `!W,1,${interval}*`;
+  $("showerPreview").innerHTML = omit ? `<b>${cmd}</b> — shower on, firmware default interval (~20s)` : `<b>${cmd}</b> — shower on, ~${interval}s avg interval`;
   send(cmd, true);
 });
 $("showerStop").addEventListener("click", ()=>{
@@ -971,18 +1056,31 @@ $("paletteSend").addEventListener("click", ()=>{
 });
 
 // ---- Smooth On/Off Transition ----
-$("fadeDuration").addEventListener("input", e => $("fadeDurationVal").textContent = e.target.value);
+linkRangeNumber("fadeDuration", "fadeDurationNum");
+$("fadeDurationOmit").addEventListener("change", e => {
+  $("fadeDuration").disabled = e.target.checked;
+  $("fadeDurationNum").disabled = e.target.checked;
+});
 $("fadeOn").addEventListener("click", ()=>{
-  const d = $("fadeDuration").value;
-  const cmd = `!O,1,${d}*`;
-  $("fadePreview").innerHTML = `<b>${cmd}</b> — fade on over ${d}ms`;
+  const omit = $("fadeDurationOmit").checked;
+  const d = $("fadeDurationNum").value;
+  const cmd = omit ? `!O,1*` : `!O,1,${d}*`;
+  $("fadePreview").innerHTML = omit ? `<b>${cmd}</b> — fade on, firmware default duration (500ms)` : `<b>${cmd}</b> — fade on over ${d}ms`;
   send(cmd, true);
 });
 $("fadeOff").addEventListener("click", ()=>{
-  const d = $("fadeDuration").value;
-  const cmd = `!O,0,${d}*`;
-  $("fadePreview").innerHTML = `<b>${cmd}</b> — fade off over ${d}ms`;
+  const omit = $("fadeDurationOmit").checked;
+  const d = $("fadeDurationNum").value;
+  const cmd = omit ? `!O,0*` : `!O,0,${d}*`;
+  $("fadePreview").innerHTML = omit ? `<b>${cmd}</b> — fade off, firmware default duration (500ms)` : `<b>${cmd}</b> — fade off over ${d}ms`;
   send(cmd, true);
+});
+
+// ---- Diagnostics ----
+$("diagResyncLegacy").addEventListener("click", ()=>{
+  const cmd = "c,1,2D,50*";
+  $("diagPreview").innerHTML = `<b>${cmd}</b> — resync test: incomplete c,1,2 immediately followed by D,50* in a single raw write`;
+  send(cmd, false);
 });
 
 // ---- Raw command ----

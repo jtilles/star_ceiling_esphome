@@ -42,6 +42,14 @@ struct ShootingStarSlot {
   // been configured behaves exactly as before.
   float trail_pixels{3.0f};        // fade length behind the streak's head, in pixels
   int16_t speed_override{-1};      // -1 = fall back to the shared "!S" effect speed
+  // Fade-curve exponent applied to the linear head-to-tail brightness ramp
+  // (see shooting_star.cpp's tick()). 1.0 = pure linear, this firmware's
+  // original hardcoded shape, where trail_pixels alone controlled both the
+  // tail's visual length *and* its falloff steepness (steepness was always
+  // exactly 255/trail_pixels). This decouples the two: >1.0 dims faster
+  // near the head (shorter-looking glow for the same trail_pixels), <1.0
+  // stays brighter for longer before dropping off near the very end.
+  float decay_exponent{1.0f};
 };
 
 namespace shooting_star {

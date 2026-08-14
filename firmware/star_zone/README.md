@@ -40,6 +40,40 @@ across all the LEDs before anything had actually been commanded — not useful
 behavior for a controller that's supposed to reflect the last command it was
 given.
 
+## Persistence across power cycles
+
+Since `controller.cpp`'s `load_persisted_state_()`/`save_persisted_state_()`
+(EEPROM), the chip remembers its settings across power loss instead of
+always coming back up in the boot-dark state above:
+
+- **Saved**: effect, transition, color, star dimmer, master brightness,
+  effect speed, palette, power on/off state, the Wipe/Fade transition
+  duration (`!F`), and each zone's `!L` tuning (trail/speed
+  override/decay).
+- **Not saved, deliberately**: identify mode, meteor-shower active state,
+  and whether a shooting-star zone is actively firing (`X`/`Y`/`Z`). These
+  read as in-progress *actions* rather than steady-state *settings* —
+  auto-resuming automatic firing after a power cycle without an explicit
+  command seemed like the wrong default. If you want any of these
+  persisted too, it's a small addition to `PersistedState` and
+  `load_persisted_state_()`/`save_persisted_state_()`.
+- **Writes are debounced** by `kPersistDebounceMs` (3000ms, `controller.h`)
+  — a burst of changes (e.g. dragging through several sliders) costs one
+  EEPROM write once things go quiet, not one per command. This also means
+  the very last change made in the 3 seconds before a power cut may not be
+  saved.
+- A magic byte + version byte (`kPersistMagic`/`kPersistVersion`,
+  `controller.h`) guard against misreading blank/erased EEPROM (which reads
+  as `0xFF` per byte) or a stale layout from a firmware version with a
+  different `PersistedState` shape — either case is treated as "nothing
+  saved yet" and the chip falls back to the normal boot-dark default.
+  **Bump `kPersistVersion` any time you change `PersistedState`'s fields**,
+  or a chip flashed with the new firmware could misinterpret old-layout
+  bytes as valid.
+- Not yet bench-tested — EEPROM read/write on a real chip, and specifically
+  whether restoring shooting-star trail/speed/decay per zone actually comes
+  back correctly, needs verification on real hardware before relying on it.
+
 ## What's original design vs. what's ported
 
 - **Legacy command parsing** (`protocol.cpp`) is transcribed directly from
@@ -126,7 +160,7 @@ strategy."
 | `!N*` / `!V*` | Identify mode: step to next/previous LED |
 | `!C,palette_id*` | Palette-driven twinkle |
 | `!W,{0\|1}[,avg_interval_s]*` | Meteor-shower auto mode on/off |
-| `!L,zone,trail[,speed]*` | Per-zone shooting star trail length + speed override |
+| `!L,zone,trail[,speed[,decay]]*` | Per-zone shooting star trail length, speed override, and decay-curve exponent |
 | `!F,ms*` | Wipe/Fade color-transition duration |
 
 **`!M,pct*` — master brightness.** Multiplies on top of the star dimmer
@@ -197,16 +231,28 @@ actual distinction from firing an X/Y/Z zone with a short `interval_s`:
 meteor shower is randomized timing + ambient color, zones are exact timing +
 an explicitly chosen color.
 
-**`!L,zone,trail[,speed]*` — per-zone shooting star tuning.** `zone` is
-`X`/`Y`/`Z`. `trail` (fade length behind the streak's head, in pixels) is
+**`!L,zone,trail[,speed[,decay]]*` — per-zone shooting star tuning.** `zone`
+is `X`/`Y`/`Z`. `trail` (fade length behind the streak's head, in pixels) is
 clamped to **1-40** — 1 is the minimum to avoid a divide-by-zero in the fade
 math (a trail of exactly 0 pixels is undefined), 40 is a generous ceiling
 (2.5x the 16-pixel strip) so a trail can span or exceed the whole strip.
 `speed` (optional) overrides the shared `!S` speed for this zone only,
 **0-255**; omit it, or send **256 or higher**, to clear the override and
-fall back to `!S`. Defaults (trail=3px, no speed override) reproduce this
-firmware's original hardcoded behavior, so a zone that's never received `!L`
-behaves exactly as before this command existed.
+fall back to `!S`. `decay` (optional, only reachable if `speed` is also
+present — send 256+ there to keep the shared speed while still setting
+decay) is a fade-curve exponent, wire value **10-500** meaning **0.10-5.00**
+(divide by 100); it's applied as `brightness = 255 * linear_ramp ^ decay`,
+where `linear_ramp` is the same head-to-tail 1→0 ramp `trail` always
+produced. `decay = 100` (exponent 1.00) is pure linear — this firmware's
+original hardcoded shape, where `trail` was the *only* knob and its falloff
+steepness was always exactly `255/trail`. Values above 100 dim faster near
+the head (a shorter-*looking* glow without shortening `trail` itself);
+below 100 stays brighter for longer before dropping off near the very end.
+Omitting `decay` resets it to 100, same as omitting `speed` resets to no
+override — `!L` always fully re-specifies a zone's tuning, it doesn't patch
+individual fields. Defaults (trail=3px, no speed override, decay=linear)
+reproduce this firmware's original hardcoded behavior, so a zone that's
+never received `!L` behaves exactly as before this command existed.
 
 **`!F,ms*` — Wipe/Fade transition duration.** How long the `w`/`f` color
 transitions take to animate from the old color to the new one. Clamped to
@@ -272,6 +318,11 @@ repeating:
    legacy (non-`!`) commands, where it's actually needed and where no field
    is ever a letter — see the comment above `poll()`'s resync check in
    `protocol.cpp`.
+6. **EEPROM persistence (see "Persistence across power cycles" above) is
+   unverified on real hardware.** The load/save logic and the ATmega328P's
+   EEPROM are both standard/well-understood, but nobody has yet power-cycled
+   a flashed chip and confirmed settings actually come back correctly —
+   treat it as implemented-but-unconfirmed until that's done.
 
 ## Building and flashing
 

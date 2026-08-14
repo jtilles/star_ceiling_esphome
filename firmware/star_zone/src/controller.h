@@ -44,7 +44,13 @@ class StarZoneController {
   // trail_pixels: fade length behind the streak's head, clamped to [1,40].
   // speed: 0-255, or 256+ (any out-of-range value) to clear the override
   // and fall back to the shared "!S" effect speed.
-  void set_shooting_star_config(ShootingStarZone zone, uint8_t trail_pixels, uint16_t speed);
+  // decay_x100: fade-curve exponent * 100, clamped to [10,500] (0.10-5.00).
+  // 100 = pure linear falloff (this firmware's original hardcoded shape,
+  // where trail length was the only knob - see shooting_star.cpp); >100
+  // makes the tail dim faster near the head (looks shorter for the same
+  // trail_pixels); <100 keeps it brighter for longer before dropping off
+  // near the very end.
+  void set_shooting_star_config(ShootingStarZone zone, uint8_t trail_pixels, uint16_t speed, uint16_t decay_x100);
   // How long the Wipe/Fade color transitions ('w'/'f') take to complete,
   // clamped to [50,10000]ms. Applies to both - Wipe and Fade differ in how
   // they use this duration (see compute_active_color_), not in duration.
@@ -57,6 +63,24 @@ class StarZoneController {
   // Clears the "no command received yet" boot-dark state - called from the
   // top of every public setter (see .cpp) so *any* command wakes the strip.
   void wake_() { booted_dark_ = false; }
+
+  // --- Persistence (EEPROM) - see firmware/star_zone/README.md's
+  // "Persistence across power cycles" section for what is and isn't saved
+  // and why. Loaded once in begin(); saved (debounced) from tick(). ---
+  void load_persisted_state_();
+  void save_persisted_state_();
+  // Called from every setter below that touches a *persisted* field (not
+  // every setter - e.g. identify mode and meteor-shower/shooting-star
+  // firing state are deliberately transient, see README). Debounced rather
+  // than written immediately so a burst of changes (e.g. someone dragging
+  // through several sliders) costs one EEPROM write, not one per command -
+  // EEPROM.put() already skips unchanged bytes (Arduino core's update()
+  // semantics), but a compare-per-byte pass on every single command still
+  // isn't free and there's no reason to pay it that often.
+  void mark_dirty_() {
+    state_dirty_ = true;
+    last_state_change_ms_ = millis();
+  }
 
   Adafruit_NeoPixel &strip_;
   RGBW pixels_[kLedCount]{};
@@ -102,6 +126,48 @@ class StarZoneController {
   uint16_t meteor_shower_interval_s_{20};
   uint32_t meteor_next_fire_ms_{0};
   ShootingStarSlot meteor_slot_;
+
+  bool state_dirty_{false};
+  uint32_t last_state_change_ms_{0};
 };
+
+// On-disk (EEPROM) layout for persisted settings - see
+// StarZoneController::load_persisted_state_/save_persisted_state_ in
+// controller.cpp. Deliberately a plain, fixed-layout struct (no versioned
+// serialization framework) - kPersistVersion below is the only compat
+// mechanism, and that's enough for a single-chip, single-firmware-image
+// project like this one.
+struct PersistedState {
+  uint8_t magic;    // must equal kPersistMagic - distinguishes real saved
+                     // state from blank/erased EEPROM, which reads as 0xFF
+                     // per byte, and from a chip that has simply never
+                     // saved anything yet
+  uint8_t version;   // must equal kPersistVersion - bumped whenever this
+                     // struct's layout changes, so a firmware update with a
+                     // different layout ignores stale-format EEPROM instead
+                     // of misreading it as valid
+  uint8_t effect;
+  uint8_t transition;
+  uint8_t color_r, color_g, color_b, color_w;
+  uint8_t dimmer_pct;
+  uint16_t color_transition_ms;
+  uint8_t master_brightness_pct;
+  uint8_t effect_speed;
+  uint8_t power_on;
+  uint8_t palette_id;
+  uint8_t trail_pixels[kShootingStarZoneCount];
+  int16_t speed_override[kShootingStarZoneCount];
+  uint16_t decay_x100[kShootingStarZoneCount];
+};
+constexpr uint8_t kPersistMagic = 0x5A;
+constexpr uint8_t kPersistVersion = 1;
+// How long to wait after the last persisted-field change before actually
+// writing EEPROM - see mark_dirty_()'s comment above.
+constexpr uint32_t kPersistDebounceMs = 3000;
+
+// Generous headroom check against the ATmega328P's 1KB EEPROM - not a tight
+// bound, just a guard against an accidental huge addition to PersistedState
+// going unnoticed.
+static_assert(sizeof(PersistedState) <= 64, "PersistedState has grown unexpectedly large for a 1KB EEPROM part");
 
 }  // namespace star_zone

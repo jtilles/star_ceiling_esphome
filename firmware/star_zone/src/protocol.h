@@ -32,10 +32,17 @@
 //   '!V'*                          - identify: step to previous LED
 //   '!C',palette_id*               - palette-driven twinkle (0 = off/solid color)
 //   '!W',{0|1}[,avg_interval_s]*   - meteor-shower auto mode on/off
-//   '!L',zone,trail[,speed]*       - per-zone shooting star trail (pixels,
-//                                    clamped 1-40) and optional speed
+//   '!L',zone,trail[,speed[,decay]]* - per-zone shooting star trail
+//                                    (pixels, clamped 1-40), optional speed
 //                                    override (0-255; omit, or send 256+,
-//                                    to fall back to the shared '!S' speed)
+//                                    to fall back to the shared '!S' speed),
+//                                    and optional decay-curve exponent*100
+//                                    (10-500 = 0.10-5.00; omit for 100 =
+//                                    linear, the original hardcoded shape).
+//                                    decay can only be reached by also
+//                                    sending speed (use 256+ there to keep
+//                                    the shared '!S' speed while still
+//                                    setting decay).
 //   '!F',ms*                       - Wipe/Fade color transition duration
 //                                    (50-10000ms, clamped)
 //
