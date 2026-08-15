@@ -35,6 +35,11 @@ class StarZoneController {
   // --- Enhancement command handlers (new "!"-prefixed namespace, see
   // protocol.h - guaranteed not to collide with the legacy grammar) ---
   void set_master_brightness(uint8_t percent);
+  // Brightness of shooting-star streaks (including meteor shower), 0-100,
+  // INDEPENDENT of the Starry Night star dimmer ("D"). Lets a dim ambient
+  // starfield carry bright streaks over it. See render_ for where in the
+  // pipeline each multiplier lands.
+  void set_shooting_star_brightness(uint8_t percent);
   void set_effect_speed(uint8_t speed);
   void set_power(bool on, uint16_t transition_ms);
   void set_identify_mode(bool active);
@@ -108,6 +113,10 @@ class StarZoneController {
 
   // Enhancements
   uint8_t master_brightness_pct_{100};
+  // Applied to shooting-star streaks only, so "D" can dim the starfield
+  // without dimming the streaks crossing it. Defaults to 100 (no change
+  // from before this existed).
+  uint8_t shooting_star_brightness_pct_{100};
   uint8_t effect_speed_{128};
 
   bool power_on_{true};
@@ -137,11 +146,22 @@ class StarZoneController {
 // serialization framework) - kPersistVersion below is the only compat
 // mechanism, and that's enough for a single-chip, single-firmware-image
 // project like this one.
+//
+// Field-order note: `version` is first but `magic` is LAST, and that is
+// load-bearing, not arbitrary. EEPROM.put() writes byte-by-byte from the
+// start of the struct, so if power is lost partway through a save, the
+// leading bytes hold new data and the trailing ones hold stale data. With
+// the magic byte written last, such a torn record simply never gets its
+// magic and is correctly rejected on the next boot. (The original layout
+// had magic first, which meant a half-finished save left a record that
+// looked perfectly valid but carried stale/garbage fields.)
+//
+// Power state is deliberately NOT persisted - see the "Persistence across
+// power cycles" section in firmware/star_zone/README.md. Restoring "off"
+// across a reboot produces a chip that powers up dark for no visible
+// reason, which reads as broken hardware rather than as a remembered
+// setting.
 struct PersistedState {
-  uint8_t magic;    // must equal kPersistMagic - distinguishes real saved
-                     // state from blank/erased EEPROM, which reads as 0xFF
-                     // per byte, and from a chip that has simply never
-                     // saved anything yet
   uint8_t version;   // must equal kPersistVersion - bumped whenever this
                      // struct's layout changes, so a firmware update with a
                      // different layout ignores stale-format EEPROM instead
@@ -152,15 +172,24 @@ struct PersistedState {
   uint8_t dimmer_pct;
   uint16_t color_transition_ms;
   uint8_t master_brightness_pct;
+  uint8_t shooting_star_brightness_pct;
   uint8_t effect_speed;
-  uint8_t power_on;
   uint8_t palette_id;
   uint8_t trail_pixels[kShootingStarZoneCount];
   int16_t speed_override[kShootingStarZoneCount];
   uint16_t decay_x100[kShootingStarZoneCount];
+  uint8_t magic;     // must equal kPersistMagic. WRITTEN LAST (see above) -
+                     // acts as a commit marker for the whole record, and
+                     // distinguishes a real save from blank/erased EEPROM,
+                     // which reads as 0xFF per byte.
 };
 constexpr uint8_t kPersistMagic = 0x5A;
-constexpr uint8_t kPersistVersion = 1;
+// v2: dropped the persisted `power_on` field and moved `magic` to the end of
+//     the struct as a torn-write commit marker.
+// v3: added shooting_star_brightness_pct ("!B").
+// Older records are a different layout and are correctly ignored by the
+// version check rather than misread.
+constexpr uint8_t kPersistVersion = 3;
 // How long to wait after the last persisted-field change before actually
 // writing EEPROM - see mark_dirty_()'s comment above.
 constexpr uint32_t kPersistDebounceMs = 3000;

@@ -25,6 +25,9 @@
 // with a bare letter) - see docs/illuminate-enhanced-prd.md's "Protocol
 // versioning / extensibility strategy":
 //   '!M',pct*                      - master brightness (0-100)
+//   '!B',pct*                      - shooting-star brightness (0-100),
+//                                    independent of the 'D' star dimmer so
+//                                    a dim starfield can carry bright streaks
 //   '!S',speed*                    - effect speed (0-255)
 //   '!O',{0|1}[,transition_ms]*    - power on/off, optional fade duration
 //   '!I',{0|1}*                    - identify/install mode on/off

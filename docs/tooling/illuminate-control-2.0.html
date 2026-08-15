@@ -206,7 +206,7 @@
       <div class="sub">Manual override + test bench — original RS232 command set plus the star_zone replacement firmware's enhancement commands</div>
     </div>
     <div class="status-line">
-      <button class="danger" id="quickPowerOff" title="!O,0,300* — true blackout, independent of effect/color/palette. This is the answer to &quot;color=black doesn't turn Random/Jamboree off&quot;: those two effects ignore the commanded color entirely by design (see their notes below), but this command overrides every effect's output, always.">⏻ Power Off</button>
+      <button class="danger" id="quickPowerToggle" title="Toggles !O,0,300* / !O,1,300* — a true blackout, independent of effect/color/palette. This is the answer to &quot;color=black doesn't turn Random/Jamboree off&quot;: those two effects ignore the commanded color entirely by design, but this command overrides every effect's output. NOTE: while powered off, NOTHING else will light the strip — colors and effects still render internally but get scaled to zero. Use this same button to turn it back on.">⏻ Power Off</button>
       <div class="dot" id="statusDot"></div>
       <span id="statusText">Disconnected</span>
     </div>
@@ -435,9 +435,16 @@
       </div>
       <div class="row">
         <label>Trail</label>
-        <input type="range" id="ssConfigTrail" min="1" max="40" value="3">
+        <input type="range" id="ssConfigTrail" min="1" max="16" value="3">
         <span class="val" id="ssConfigTrailVal">3</span>
-        <span class="note new">pixels</span>
+        <span class="note new">pixels (capped at the 16-LED strip length; firmware still accepts up to 40)</span>
+      </div>
+      <div class="row">
+        <label>Brightness</label>
+        <input type="range" id="ssBrightness" min="0" max="100" value="100">
+        <span class="val" id="ssBrightnessVal">100</span>
+        <span class="note new">% — independent of the Star Dimmer, so a dim starfield can carry bright streaks</span>
+        <button class="primary" id="ssBrightnessSend">Set</button>
       </div>
       <div class="row">
         <label>Speed override</label>
@@ -492,7 +499,7 @@
 
     <div class="panel new">
       <h2>Palette-Driven Twinkle <span class="badge-new">New</span></h2>
-      <div class="note new" style="margin-bottom:10px;">Twinkle/Firefly/Breeze/Rain Drops/Jamboree can draw from one of the firmware's built-in palettes instead of one fixed color (no custom palette definitions - built-ins only).</div>
+      <div class="note new" style="margin-bottom:10px;">Twinkle/Firefly/Breeze/Rain Drops/Jamboree can draw from one of the firmware's built-in palettes instead of one fixed color (no custom palette definitions - built-ins only). <b>Rainbow Cycle</b> is special: every LED holds the <b>same hue at the same time</b> and the whole strip fades smoothly through the spectrum together, paced by <b>Effect Speed</b> (60s per full sweep at speed 0, 2s at 255). That's different from the gold <b>Rainbow</b> transition, which spreads hues <i>across</i> the strip instead.</div>
       <div class="row">
         <label>Palette</label>
         <select id="paletteSelect">
@@ -501,6 +508,7 @@
           <option value="2">2 - Ocean</option>
           <option value="3">3 - Forest</option>
           <option value="4">4 - Candy</option>
+          <option value="5">5 - Rainbow Cycle (whole strip fades as one)</option>
         </select>
         <button class="primary" id="paletteSend">Set</button>
       </div>
@@ -701,13 +709,26 @@ async function disconnect(){
 $("connectBtn").addEventListener("click", connect);
 $("disconnectBtn").addEventListener("click", disconnect);
 
-// ---- Quick Power Off (header) ----
+// ---- Quick Power toggle (header) ----
 // True blackout regardless of effect - unlike setting color to black, which
 // Random and Jamboree (with no palette) both ignore by design (they compute
 // their own colors and never read the commanded `c`/`!C` state). !O is a
-// post-render output multiplier, so nothing can bypass it.
-$("quickPowerOff").addEventListener("click", ()=>{
-  send("!O,0,300*", true);
+// post-render output multiplier applied after every effect renders, so
+// nothing can bypass it - which also means that while powered OFF, no color
+// or effect command will light the strip. It has to be a toggle: an off-only
+// button is a one-way trip with no obvious way back.
+let powerIsOn = true;
+function setPowerButtonState(on){
+  powerIsOn = on;
+  const btn = $("quickPowerToggle");
+  btn.textContent = on ? "⏻ Power Off" : "⏻ Power On";
+  btn.classList.toggle("danger", on);
+  btn.classList.toggle("primary", !on);
+}
+$("quickPowerToggle").addEventListener("click", ()=>{
+  const turningOn = !powerIsOn;
+  send(turningOn ? "!O,1,300*" : "!O,0,300*", true);
+  setPowerButtonState(turningOn);
 });
 
 if(!("serial" in navigator)){
@@ -995,6 +1016,13 @@ $("ssConfigTrail").addEventListener("input", e => $("ssConfigTrailVal").textCont
 $("ssConfigSpeed").addEventListener("input", e => $("ssConfigSpeedVal").textContent = e.target.value);
 $("ssConfigSpeedEnabled").addEventListener("change", e => $("ssConfigSpeed").disabled = !e.target.checked);
 $("ssConfigDecay").addEventListener("input", e => $("ssConfigDecayVal").textContent = e.target.value);
+$("ssBrightness").addEventListener("input", e => $("ssBrightnessVal").textContent = e.target.value);
+$("ssBrightnessSend").addEventListener("click", ()=>{
+  const v = $("ssBrightness").value;
+  const cmd = `!B,${v}*`;
+  $("ssConfigPreview").innerHTML = `<b>${cmd}</b> — shooting-star brightness ${v}% (independent of the D star dimmer)`;
+  send(cmd, true);
+});
 $("ssConfigSend").addEventListener("click", ()=>{
   const trail = $("ssConfigTrail").value;
   const speedEnabled = $("ssConfigSpeedEnabled").checked;
@@ -1047,7 +1075,7 @@ $("idStop").addEventListener("click", ()=>{
 });
 
 // ---- Palette-Driven Twinkle ----
-const PALETTE_NAMES = {0:"Off (use last color command)", 1:"Fire", 2:"Ocean", 3:"Forest", 4:"Candy"};
+const PALETTE_NAMES = {0:"Off (use last color command)", 1:"Fire", 2:"Ocean", 3:"Forest", 4:"Candy", 5:"Rainbow Cycle"};
 $("paletteSend").addEventListener("click", ()=>{
   const id = $("paletteSelect").value;
   const cmd = `!C,${id}*`;
@@ -1067,6 +1095,7 @@ $("fadeOn").addEventListener("click", ()=>{
   const cmd = omit ? `!O,1*` : `!O,1,${d}*`;
   $("fadePreview").innerHTML = omit ? `<b>${cmd}</b> — fade on, firmware default duration (500ms)` : `<b>${cmd}</b> — fade on over ${d}ms`;
   send(cmd, true);
+  setPowerButtonState(true);   // keep the header toggle in sync
 });
 $("fadeOff").addEventListener("click", ()=>{
   const omit = $("fadeDurationOmit").checked;
@@ -1074,6 +1103,7 @@ $("fadeOff").addEventListener("click", ()=>{
   const cmd = omit ? `!O,0*` : `!O,0,${d}*`;
   $("fadePreview").innerHTML = omit ? `<b>${cmd}</b> — fade off, firmware default duration (500ms)` : `<b>${cmd}</b> — fade off over ${d}ms`;
   send(cmd, true);
+  setPowerButtonState(false);  // keep the header toggle in sync
 });
 
 // ---- Diagnostics ----

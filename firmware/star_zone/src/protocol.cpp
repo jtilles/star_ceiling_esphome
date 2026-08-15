@@ -148,6 +148,9 @@ void dispatch_enhancement(const char *cmd, uint8_t len, StarZoneController &cont
     case 'M':
       if (read_field(p, f[0])) controller.set_master_brightness((uint8_t) f[0]);
       return;
+    case 'B':
+      if (read_field(p, f[0])) controller.set_shooting_star_brightness((uint8_t) f[0]);
+      return;
     case 'S':
       if (read_field(p, f[0])) controller.set_effect_speed((uint8_t) f[0]);
       return;

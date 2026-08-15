@@ -22,7 +22,8 @@ void start(ShootingStarSlot &slot, const RGBW &color, uint16_t interval_seconds,
   slot.next_streak_ms = now_ms;  // fire the first streak immediately
 }
 
-bool tick(ShootingStarSlot &slot, RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed) {
+bool tick(ShootingStarSlot &slot, RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed,
+          uint8_t brightness_pct) {
   if (!slot.firing) return false;
 
   if (!slot.streak_active) {
@@ -57,8 +58,10 @@ bool tick(ShootingStarSlot &slot, RGBW *pixels, uint8_t count, uint32_t now_ms, 
     // linear (0..1, full brightness at the head down to 0 at trail_pixels
     // back) raised to decay_exponent - see the field comment in
     // shooting_star.h. exponent 1.0 reproduces the original pure-linear ramp.
+    // brightness_pct scales the whole streak independently of the Starry
+    // Night layer it blends onto ("!B").
     float linear = 1.0f - dist / slot.trail_pixels;
-    uint8_t bright = (uint8_t) (255.0f * powf(linear, slot.decay_exponent));
+    uint8_t bright = (uint8_t) (255.0f * powf(linear, slot.decay_exponent) * (brightness_pct / 100.0f));
     color_utils::blend_add(pixels[i], color_utils::scale(slot.color, bright));
   }
   return true;

@@ -68,7 +68,13 @@ void start(ShootingStarSlot &slot, const RGBW &color, uint16_t interval_seconds,
 // onto `pixels` (color_utils::blend_add, so overlapping zones brighten
 // rather than overwrite each other). Returns true while the zone is still
 // firing (including the gap between streaks), false once it's fully done.
-bool tick(ShootingStarSlot &slot, RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed);
+//
+// `brightness_pct` (0-100) scales the streak independently of the Starry
+// Night layer underneath it - see StarZoneController::render_ and the "!B"
+// command. Folded into the per-pixel fade math rather than applied to the
+// buffer afterwards, so it costs no extra pixel buffer.
+bool tick(ShootingStarSlot &slot, RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed,
+          uint8_t brightness_pct = 100);
 
 }  // namespace shooting_star
 }  // namespace star_zone

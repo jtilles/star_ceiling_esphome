@@ -47,8 +47,8 @@ Since `controller.cpp`'s `load_persisted_state_()`/`save_persisted_state_()`
 always coming back up in the boot-dark state above:
 
 - **Saved**: effect, transition, color, star dimmer, master brightness,
-  effect speed, palette, power on/off state, the Wipe/Fade transition
-  duration (`!F`), and each zone's `!L` tuning (trail/speed
+  shooting-star brightness (`!B`), effect speed, palette, the Wipe/Fade
+  transition duration (`!F`), and each zone's `!L` tuning (trail/speed
   override/decay).
 - **Not saved, deliberately**: identify mode, meteor-shower active state,
   and whether a shooting-star zone is actively firing (`X`/`Y`/`Z`). These
@@ -57,6 +57,28 @@ always coming back up in the boot-dark state above:
   command seemed like the wrong default. If you want any of these
   persisted too, it's a small addition to `PersistedState` and
   `load_persisted_state_()`/`save_persisted_state_()`.
+- **Power on/off (`!O`) is deliberately NOT saved — the chip always boots
+  ON.** This was persisted originally and it was a mistake: hit power-off,
+  power-cycle the board, and it comes back dark with no indication whether
+  it is remembering a setting or has failed. Worse, while powered off,
+  *nothing else lights the strip* — colors and effects still render, then
+  get scaled to zero by the power multiplier — so every obvious recovery
+  attempt silently does nothing. Boot-on is the recoverable default.
+- **EEPROM contents are treated as untrusted input on load.** Every field
+  is re-validated/clamped through the same rules its setter enforces,
+  rather than being assigned raw. A stale or corrupted record could
+  otherwise produce a state no command can undo — `dimmer_pct = 0` is
+  permanently dark and is *not* fixable with `!O,1*` (power level and
+  dimmer are independent multipliers), and an out-of-range `effect` enum
+  matches no case in `effects::render()`, leaving the pixel buffer
+  untouched forever. Invalid fields fall back to defaults.
+- **Saves are torn-write safe.** `magic` is the last field of
+  `PersistedState` and is written in a separate third phase: the existing
+  magic is first zeroed, then the payload is written, then the magic is
+  stamped. Losing power at any point leaves the record without its magic,
+  so it is cleanly rejected at next boot instead of loading half-new,
+  half-stale fields. (The first implementation wrote magic first, so an
+  interrupted save left a record that validated but carried stale data.)
 - **Writes are debounced** by `kPersistDebounceMs` (3000ms, `controller.h`)
   — a burst of changes (e.g. dragging through several sliders) costs one
   EEPROM write once things go quiet, not one per command. This also means
@@ -69,7 +91,8 @@ always coming back up in the boot-dark state above:
   saved yet" and the chip falls back to the normal boot-dark default.
   **Bump `kPersistVersion` any time you change `PersistedState`'s fields**,
   or a chip flashed with the new firmware could misinterpret old-layout
-  bytes as valid.
+  bytes as valid. (Currently v2; v1 persisted `power_on` and put `magic`
+  first.)
 - Not yet bench-tested — EEPROM read/write on a real chip, and specifically
   whether restoring shooting-star trail/speed/decay per zone actually comes
   back correctly, needs verification on real hardware before relying on it.
@@ -154,6 +177,7 @@ strategy."
 | Command | Meaning |
 |---|---|
 | `!M,pct*` | Master brightness |
+| `!B,pct*` | Shooting-star brightness, independent of the `D` star dimmer |
 | `!S,speed*` | Shared effect/shooting-star speed |
 | `!O,{0\|1}[,transition_ms]*` | Power on/off with a smooth fade |
 | `!I,{0\|1}*` | Identify/install mode on/off |
@@ -169,6 +193,20 @@ prd.md`'s "global scaling applied across all outputs, independent of the
 existing per-zone dimmers." `pct` clamps to **0-100** (unlike the star
 dimmer, 0 is allowed here — this is the control meant to actually turn the
 strip fully dark without losing the dimmer/color state underneath it).
+
+**`!B,pct*` — shooting-star brightness.** Scales shooting-star streaks
+(X/Y/Z zones *and* the meteor shower) **independently of the `D` star
+dimmer**, 0-100, default 100. This exists so the Starry Night layer can sit
+dim as an ambient starfield while streaks cross it at full brightness —
+impossible before, because `D` was applied to the composited frame and
+dimmed both together.
+
+**This changes what `D` affects.** `D` now scales the Starry Night layer
+only, and is applied *before* streaks are blended in; the composited result
+is then scaled by `!M` (master) and the `!O` power level. The full pipeline
+is documented in `controller.cpp`'s `render_()`. There's no backward-
+compatibility concern: stock hardware has no Shooting Star support at all,
+so no existing setup can depend on `D` dimming streaks.
 
 **`!S,speed*` — shared effect/shooting-star speed.** One `speed` byte
 (**0-255**) drives the pacing of whichever Starry Night effect is active
@@ -212,11 +250,29 @@ i.e. 0-15 on a 16-LED strip); `!I,0*` resumes normal rendering.
 
 **`!C,palette_id*` — palette-driven twinkle.** Twinkle/Firefly/Breeze/Rain
 Drops/Jamboree normally render using the last `c,R,G,B,W*` color; `palette_id`
-**1-4** switches that source to one of four built-in gradients instead
+**1-5** switches that source to a built-in palette instead
 (`palette.cpp`: 1=Fire, 2=Ocean, 3=Forest, 4=Candy — arbitrary "themed" sets,
 no hardware reference to match). `0` disables the palette and reverts to the
-plain commanded color. Values above 4 are treated as `0` rather than
+plain commanded color. Values above 5 are treated as `0` rather than
 erroring.
+
+**`5` = Rainbow Cycle** is a special case rather than a 4-stop gradient:
+every LED shows the **same hue at the same instant**, and the whole strip
+fades smoothly through the full spectrum together, paced by the `!S` effect
+speed — **60s** for a complete sweep at speed 0, **2s** at speed 255.
+
+Do not confuse it with the `r` **RAINBOW color transition**, which is a
+different look built from the same math: `r` deliberately adds a per-pixel
+hue offset so the spectrum is spread *across* the strip (a rainbow you can
+see all of at once, drifting), whereas Rainbow Cycle omits that offset so
+the strip is a single, uniformly-changing color. The per-pixel offset is
+the entire difference — see `source_color()` in `star_effects.cpp` versus
+the `RAINBOW` case in `controller.cpp`'s `compute_active_color_()`.
+
+Note that the selected Starry Night effect still applies its own per-pixel
+*brightness* animation on top, so with Twinkle the LEDs share a hue while
+twinkling independently. For a completely flat, uniform strip there is no
+"solid" effect to select — that would need a new effect, not a palette.
 
 **`!W,{0|1}[,avg_interval_s]*` — meteor-shower auto mode.** An *additional*,
 automatic streak generator layered on top of everything else — it does not
@@ -287,25 +343,39 @@ repeating:
    (3px trail, shared `!S` speed) reproduce the original hardcoded values.
 3. Effect timings in `star_effects.cpp` are similarly original — adjust
    freely, nothing here is "the correct" Twinkle/Firefly/etc. speed.
-4. **Top-Star reception of longer commands.** First-hardware-test finding:
-   on one Top-Star chip (flashed and verified via ISP, receiving and acting
-   on single-byte commands like effect-select fine), multi-byte comma-
-   delimited commands (`c,R,G,B,W*` in particular) were silently having no
-   effect, while the same commands worked on Bot-Star. Single-byte commands
-   surviving while longer ones fail points at marginal UART signal
-   integrity on that chip's specific reception path corrupting/dropping a
-   byte mid-command, rather than a logic bug (the parser is identical for
-   both chips). This is also the exact hardware question flagged as
-   unresolved in `docs/illuminate-hardware-notes.md`: "Confirm whether
-   Top-Star's hardware RXD is on the same broadcast bus as Main/Bot-Star."
-   `protocol.cpp`'s parser now resyncs itself (abandons a buffered command
-   that never saw its terminator as soon as the next command-start byte
-   arrives) so one corrupted command can no longer also eat the next
-   legitimate one, but that's a mitigation, not a fix for a wiring/signal
-   integrity problem — if commands are still unreliable on a given chip
-   after this, capture that chip's RXD line during a `c,...*` send (the
-   Saleae tooling in `docs/tooling/` already does exactly this) to see
-   whether bytes are actually arriving intact.
+4. **SOLVED — "Top-Star reception of longer commands" was never a hardware
+   problem.** For a long time this was recorded here as an unexplained
+   quirk: single-byte commands (effect select) worked, while multi-byte
+   comma-delimited ones (`c,R,G,B,W*`) silently did nothing, and it was
+   assumed to be marginal UART signal integrity on one chip's reception
+   path, possibly related to `docs/illuminate-hardware-notes.md`'s open
+   question about whether Top-Star's RXD shares the broadcast bus.
+
+   The real cause was in this firmware: `main.cpp`'s `loop()` called
+   `controller.tick()` (and therefore `Adafruit_NeoPixel::show()`) on every
+   single iteration. `show()` disables interrupts for the whole pixel
+   transmission — ~640µs for 16 RGBW pixels — so interrupts were off well
+   over half the time and the UART RX interrupt couldn't run. Bytes were
+   dropped. A single-byte command only has to survive one blackout window;
+   a 12-byte command has to survive twelve, which is exactly why short
+   commands "worked" and long ones didn't. **Expanding the strip from 8 to
+   16 LEDs doubled the blackout and took it from flaky to completely
+   non-functional** — no command of any length got through.
+
+   Fixed by rendering on a fixed ~50 FPS timer (`kRenderIntervalMs` in
+   `main.cpp`) while still polling serial every iteration, dropping the
+   interrupts-off duty cycle to ~3%.
+
+   Diagnosed on real hardware by splitting the two paths apart with
+   standalone test firmware: one build that lit the strip unconditionally
+   at boot (proving LED output, power, and the data line were fine), and
+   one that displayed each received serial byte in binary on the LEDs
+   (proving bytes arrived intact at 9600 baud). With both halves proven
+   good in isolation but the real firmware still unresponsive, the fault
+   had to be the interaction between them. **If a symptom like this recurs,
+   bisect output vs. input with dedicated test firmware before theorizing
+   about the code** — it is far faster than reasoning from source, and both
+   test builds took under a minute to write and flash.
 5. **Fixed: the resync logic from item 4 was itself breaking `!`-prefixed
    commands.** The mitigation described above — abandon a buffered command
    and start fresh as soon as a byte arrives that looks like a new command's

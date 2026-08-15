@@ -39,6 +39,10 @@ const Stop *palette_stops(uint8_t id) {
 }  // namespace
 
 RGBW sample(uint8_t id, uint8_t phase) {
+  // Rainbow Cycle isn't a 4-stop gradient - it's the full spectrum, so map
+  // phase straight onto hue. See kRainbowCycleId's comment in palette.h.
+  if (id == kRainbowCycleId) return color_utils::hue_to_rgb(phase);
+
   const Stop *stops = palette_stops(id);
   uint8_t seg = 0;
   while (seg < 2 && phase >= stops[seg + 1].phase) seg++;

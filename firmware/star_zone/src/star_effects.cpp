@@ -13,7 +13,17 @@ namespace {
 
 // Resolves "the color" for pixel i: palette override if active, else
 // whatever the color-transition layer already computed for that pixel.
-RGBW source_color(uint8_t i, uint32_t now_ms, const RGBW *active_color, uint8_t palette_id) {
+RGBW source_color(uint8_t i, uint32_t now_ms, const RGBW *active_color, uint8_t palette_id, uint8_t speed) {
+  if (palette_id == palette::kRainbowCycleId) {
+    // Uniform across the strip (no per-pixel phase offset) and paced by the
+    // "!S" effect speed, so every LED holds the same hue and the whole strip
+    // fades through the spectrum together. Full sweep takes 60s at speed 0,
+    // 2s at speed 255. See kRainbowCycleId in palette.h for how this differs
+    // from the "r" RAINBOW transition.
+    uint16_t period_ms = (uint16_t) map(speed, 0, 255, 60000, 2000);
+    uint8_t phase = (uint8_t) ((now_ms % period_ms) * 255UL / period_ms);
+    return palette::sample(palette::kRainbowCycleId, phase);
+  }
   if (palette_id != palette::kSolidPaletteId) {
     uint8_t phase = (uint8_t) ((now_ms / 60 + i * 32) & 0xFF);
     return palette::sample(palette_id, phase);
@@ -35,7 +45,7 @@ void render_twinkle(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed,
     uint16_t period = base_period + (color_utils::hash8(i, 0) % 400);
     uint32_t offset = color_utils::hash8(i, 1) * 7UL;
     uint8_t bright = triangle(now_ms + offset, period);
-    pixels[i] = color_utils::scale(source_color(i, now_ms, active_color, palette_id), bright);
+    pixels[i] = color_utils::scale(source_color(i, now_ms, active_color, palette_id, speed), bright);
   }
 }
 
@@ -48,7 +58,7 @@ void render_firefly(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed,
     uint32_t offset = color_utils::hash8(i, 3) * 23UL;
     bool active_this_cycle = ((now_ms + offset) / period) % 2 == color_utils::hash8(i, 4) % 2;
     uint8_t bright = active_this_cycle ? triangle(now_ms + offset, period) / 2 + 20 : 0;
-    pixels[i] = color_utils::scale(source_color(i, now_ms, active_color, palette_id), bright);
+    pixels[i] = color_utils::scale(source_color(i, now_ms, active_color, palette_id, speed), bright);
   }
 }
 
@@ -61,7 +71,7 @@ void render_breeze(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed, 
     float x = (float) i / count;
     float wave = sinf(2 * PI * (x - t / period_s));
     uint8_t bright = (uint8_t) (140 + 115 * wave);
-    pixels[i] = color_utils::scale(source_color(i, now_ms, active_color, palette_id), bright);
+    pixels[i] = color_utils::scale(source_color(i, now_ms, active_color, palette_id, speed), bright);
   }
 }
 
@@ -86,7 +96,7 @@ void render_rain_drops(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t spe
     uint8_t bright = (drop_here && since_bucket_start < kDecayMs)
                           ? (uint8_t) map(since_bucket_start, 0, kDecayMs, 255, 0)
                           : 0;
-    pixels[i] = color_utils::scale(source_color(i, now_ms, active_color, palette_id), bright);
+    pixels[i] = color_utils::scale(source_color(i, now_ms, active_color, palette_id, speed), bright);
   }
 }
 
@@ -98,7 +108,7 @@ void render_jamboree(RGBW *pixels, uint8_t count, uint32_t now_ms, uint8_t speed
   uint16_t sparkle_period = map(speed, 0, 255, 1600, 250);
   for (uint8_t i = 0; i < count; i++) {
     uint8_t hue = (uint8_t) (((now_ms % hue_period) * 255UL / hue_period) + i * (255 / count));
-    RGBW base = palette_id != palette::kSolidPaletteId ? source_color(i, now_ms, active_color, palette_id)
+    RGBW base = palette_id != palette::kSolidPaletteId ? source_color(i, now_ms, active_color, palette_id, speed)
                                                          : color_utils::hue_to_rgb(hue);
     uint8_t sparkle = triangle(now_ms + color_utils::hash8(i, 5) * 11UL, sparkle_period);
     uint8_t bright = (uint8_t) (100 + ((uint16_t) sparkle * 155 / 255));
