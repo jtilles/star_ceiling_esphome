@@ -22,8 +22,11 @@ implemented per the manual but is **not functional on SP-firmware units** — se
 A separate, standalone replacement firmware for the Top-Star/Bot-Star chips themselves
 (adding real Shooting Star support on any unit, plus brightness/speed/palette
 enhancements) lives in `firmware/star_zone/` — see
-["Top/Bot-Star replacement firmware"](#topbot-star-replacement-firmware) below; it
-compiles cleanly but hasn't been flashed to real hardware yet.
+["Top/Bot-Star replacement firmware"](#topbot-star-replacement-firmware) below; it has
+been bench-flashed and iterated against real hardware.
+
+The component now also speaks that firmware's `!`-prefixed enhancement command set — see
+["Driving the star_zone enhancements"](#driving-the-star_zone-enhancements).
 
 ## What this hardware is
 
@@ -138,14 +141,28 @@ implemented-per-design rather than field-validated until confirmed.
   *which* effect is active, not tune a running effect's parameters, so a runtime speed
   slider wouldn't be reachable from the HA UI regardless.
 - **Shooting Star** is modeled as a `light` rather than a `button` + `number`/`select`.
-  A shot is fundamentally "a color, fired for a duration," which maps naturally onto a
-  light's color + on/off, and gets HA's color picker for free. The tradeoff: shot
-  *duration* doesn't fit HA's light data model at all (it's not brightness or a
-  transition), so it's a fixed config-time value (`duration:`) per light entry rather
+  A shot is fundamentally "a color, fired on a cadence," which maps naturally onto a
+  light's color + on/off, and gets HA's color picker for free. The tradeoff: the firing
+  *interval* doesn't fit HA's light data model at all (it's not brightness or a
+  transition), so it's a fixed config-time value (`interval:`) per light entry rather
   than adjustable per-shot from the HA UI — add one `illuminate` light entry per
-  zone/duration combination you want available if you need more than one duration at
-  runtime. Turning the light off sends the manual's explicit
-  `{Zone},0,0,0,0,0*` shorthand, canceling an in-flight shot immediately.
+  zone/interval combination you want available if you need more than one at runtime.
+  Turning the light off sends the explicit `{Zone},0,0,0,0,0*` shorthand, canceling the
+  zone immediately.
+- **`interval:` is seconds *between* shots, not a shot length.** The original manual
+  documented this wire field as `0/1/2/5/10` meaning minutes of *continuous* firing;
+  `star_zone` firmware reinterprets the same field position as an interval — fire one
+  streak, then another every N seconds, until sent `0`. Real bench testing found "fire
+  predictably every N seconds" far more useful than "run continuously for N minutes," so
+  the field's meaning changed even though its position didn't. The component follows the
+  firmware, so `interval:` takes any time period and the full 16-bit range (1s-65535s).
+- **The enhancement commands are exposed as hub methods, not as new platforms.** Every
+  `!` command is a public `send_*` on `IlluminateHub`, driven from YAML lambdas on stock
+  `template` number/switch/select/button entities (see `cooper_ceiling.yaml`). Eleven
+  near-identical codegen platforms would have been a lot of machinery to give each
+  command a bespoke `platform:` name, and it would have locked each one into a single
+  entity type; a public hub API leaves the choice of entity — and of which commands to
+  surface at all — to the config.
 - **Brightness floor:** the hardware's dimmers only go down to 10%, not 0. ESPHome's
   0.0-1.0 brightness range is mapped linearly onto 10-100% (`pct = round(10 + b*90)`)
   rather than snapping straight to the floor, so the full HA brightness slider range
@@ -156,9 +173,58 @@ implemented-per-design rather than field-validated until confirmed.
 Confirmed against real hardware over a wired UART connection: Starry Night effects,
 Starry Night colors, and the star dimmer. Implied by protocol symmetry but **not yet
 bench-tested**: Ambient Light effects/colors, the ambient dimmer, and the four color
-transitions. Shooting Star is implemented exactly per the manual's command tables but is
-confirmed **not functional** on this repo owner's SP-firmware unit (expected — see "SP
-vs. SS firmware" above) and has not been tested against SS-firmware hardware yet.
+transitions. Shooting Star is confirmed **not functional** on a stock SP-firmware unit
+(expected — see "SP vs. SS firmware" above) and has never been tested against a real
+SS-firmware board; it *is* functional against `firmware/star_zone/`, which is what the
+zone chip in this repo owner's ceiling now runs.
+
+The `!` enhancement commands are generated from the ranges documented in
+`firmware/star_zone/README.md` and their wire shapes were checked against that firmware's
+own parser (`firmware/star_zone/src/protocol.cpp`), but the ESPHome-side entities driving
+them have not yet been exercised end-to-end against the hardware.
+
+## Driving the star_zone enhancements
+
+`firmware/star_zone/` adds a `!`-prefixed command set on top of the legacy grammar (full
+per-field reference in [that firmware's README](firmware/star_zone/README.md)). Each one
+is a public method on the hub, so any YAML lambda can reach it:
+
+| Command | Hub method | Wired up in `cooper_ceiling.yaml` as |
+|---|---|---|
+| `!M,pct*` | `send_master_brightness(pct)` | number — Star Ceiling Master Brightness |
+| `!B,pct*` | `send_shooting_star_brightness(pct)` | number — Shooting Star Brightness |
+| `!S,speed*` | `send_effect_speed(speed)` | number — Star Ceiling Effect Speed |
+| `!F,ms*` | `send_color_transition_duration(ms)` | number — Star Ceiling Transition Duration |
+| `!L,zone,trail,speed,decay*` | `send_shooting_star_tuning(zone, trail, speed, decay)` | numbers — Shooting Star Trail/Speed/Decay |
+| `!O,{0\|1},ms*` | `send_power(on, ms)` | switch — Star Ceiling Power |
+| `!I,{0\|1}*` | `send_identify(on)` | switch — Star Ceiling Identify Mode |
+| `!W,{0\|1},s*` | `send_meteor_shower(on, s)` | switch + number — Meteor Shower |
+| `!C,id*` | `send_palette(palette)` | select — Star Ceiling Palette |
+| `!N*` / `!V*` | `send_identify_next()` / `send_identify_previous()` | buttons — Identify Next/Previous LED |
+
+Three things worth knowing before adapting this to your own config:
+
+- **These are safe to leave in a stock-board config.** Stock zone firmware ignores any
+  command starting with `!`, so the entities still validate, still send, and simply do
+  nothing — they degrade to no-ops rather than erroring.
+- **`!L` is all-or-nothing.** It fully re-specifies a zone's tuning; an omitted trailing
+  field *resets* that field rather than leaving it alone. That's why the three tuning
+  numbers all route through one `apply_shooting_star_tuning` script that re-sends the
+  complete trail/speed/decay triple whenever any one of them changes, instead of each
+  number sending its own partial `!L`. The `speed` field's "no override" sentinel is
+  `256` (`protocol::SHOOTING_STAR_SPEED_INHERIT`), which is why that slider runs to 256
+  rather than 255 and why the field is a `uint16_t`.
+- **Power on/off is not the same as setting the color to black.** Random and Jamboree
+  generate their own per-pixel colors and ignore the commanded color entirely, so black
+  doesn't turn them off. `!O` is a post-render output multiplier applied after every
+  effect, so nothing can bypass it. The firmware deliberately does not persist power
+  state and always boots ON, which is why the switch uses `restore_mode: ALWAYS_ON`.
+
+One behavior change to be aware of if you were already using `D`: on `star_zone`, the
+star dimmer now scales the Starry Night layer **only**, and is applied before streaks are
+blended in. Streaks are scaled by `!B` instead. That's what allows a dim ambient starfield
+under full-brightness shooting stars — impossible before, when `D` dimmed the composited
+frame and took both down together.
 
 ## Repo layout
 

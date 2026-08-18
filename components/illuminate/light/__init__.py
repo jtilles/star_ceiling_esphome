@@ -11,7 +11,6 @@ from .. import (
     StarryEffect,
     AmbientEffect,
     ShootingStarZone,
-    ShootingStarDuration,
 )
 from ..const import CONF_ILLUMINATE_ID
 
@@ -26,7 +25,7 @@ AmbientEffectLightEffect = illuminate_ns.class_("AmbientEffectLightEffect", Ligh
 StarryAnimationEffect = illuminate_ns.class_("StarryAnimationEffect", LightEffect)
 
 CONF_ZONE = "zone"
-CONF_DURATION = "duration"
+CONF_INTERVAL = "interval"
 CONF_SPEED = "speed"
 
 TYPE_STARRY_NIGHT = "starry_night"
@@ -39,14 +38,13 @@ ZONE_OPTIONS = {
     "zone_3": ShootingStarZone.ZONE_3,
 }
 
-# Shooting Star's "0"/off duration is handled by the light's own on/off, not a selectable
-# shot duration - only the four real shot lengths from the manual are offered here.
-DURATION_OPTIONS = {
-    "1min": ShootingStarDuration.ONE_MINUTE,
-    "2min": ShootingStarDuration.TWO_MINUTES,
-    "5min": ShootingStarDuration.FIVE_MINUTES,
-    "10min": ShootingStarDuration.TEN_MINUTES,
-}
+# Seconds BETWEEN shots, not a shot length - see illuminate_protocol.h. The "0"/off case
+# is handled by the light's own on/off rather than being selectable here, so the minimum
+# is 1s; the maximum is what the 16-bit wire field allows (~18.2 hours).
+def _interval_seconds(value):
+    seconds = cv.positive_time_period_seconds(value).total_seconds
+    return cv.int_range(min=1, max=65535)(int(seconds))
+
 
 # The six Starry Night animations (Twinkle..Jamboree) map naturally onto ESPHome's normal
 # light effects: they're mutually-exclusive named modes, exactly like WLED/core effects,
@@ -131,14 +129,15 @@ AMBIENT_SCHEMA = _BASE_SCHEMA.extend(
     }
 )
 
-# Only functional on SS-firmware units - see README. Omit this `type: shooting_star`
-# light entirely from your config if your board is SP-firmware; there is nothing else to
-# disable, it's simply never instantiated unless you add one.
+# Requires Shooting Star support on the zone chip: either an SS-firmware unit or this
+# repo's star_zone replacement firmware. Stock SP-firmware zone chips ignore X/Y/Z
+# entirely - omit this `type: shooting_star` light if that's what you have; there is
+# nothing else to disable, it's simply never instantiated unless you add one.
 SHOOTING_STAR_SCHEMA = _BASE_SCHEMA.extend(
     {
         cv.GenerateID(CONF_OUTPUT_ID): cv.declare_id(ShootingStarLight),
         cv.Required(CONF_ZONE): cv.enum(ZONE_OPTIONS, lower=True),
-        cv.Optional(CONF_DURATION, default="1min"): cv.enum(DURATION_OPTIONS, lower=True),
+        cv.Optional(CONF_INTERVAL, default="30s"): _interval_seconds,
     }
 )
 
@@ -160,4 +159,4 @@ async def to_code(config):
 
     if config[CONF_TYPE] == TYPE_SHOOTING_STAR:
         cg.add(var.set_zone(config[CONF_ZONE]))
-        cg.add(var.set_duration(config[CONF_DURATION]))
+        cg.add(var.set_interval_seconds(config[CONF_INTERVAL]))

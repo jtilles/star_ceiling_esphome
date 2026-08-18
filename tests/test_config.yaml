@@ -48,7 +48,7 @@ light:
     name: Shooting Star Zone 1
     illuminate_id: illuminate_hub
     zone: zone_1
-    duration: 2min
+    interval: 2min  # seconds between shots (accepts any time period)
 
 select:
   - platform: illuminate

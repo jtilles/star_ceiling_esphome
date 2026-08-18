@@ -30,7 +30,7 @@ void ShootingStarLight::write_state(light::LightState *state) {
       static_cast<uint8_t>(lroundf(blue * 255.0f)),
       static_cast<uint8_t>(lroundf(white * 255.0f)),
   };
-  this->hub_->send_shooting_star(this->zone_, color, this->duration_);
+  this->hub_->send_shooting_star(this->zone_, color, this->interval_seconds_);
 }
 
 }  // namespace illuminate

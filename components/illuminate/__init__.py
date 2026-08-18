@@ -20,7 +20,7 @@ StarryEffect = illuminate_ns.enum("StarryEffect", is_class=True)
 ColorTransition = illuminate_ns.enum("ColorTransition", is_class=True)
 AmbientEffect = illuminate_ns.enum("AmbientEffect", is_class=True)
 ShootingStarZone = illuminate_ns.enum("ShootingStarZone", is_class=True)
-ShootingStarDuration = illuminate_ns.enum("ShootingStarDuration", is_class=True)
+StarPalette = illuminate_ns.enum("StarPalette", is_class=True)
 
 CONFIG_SCHEMA = (
     cv.Schema(

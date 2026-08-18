@@ -90,14 +90,20 @@ select:
     name: Star Ceiling Color Transition
     illuminate_id: illuminate_hub
 
-# Shooting Star zone(s): ONLY functional on SS-firmware units - see README. Commented
-# out here since this example targets a single SP-firmware board. Uncomment and point
-# `illuminate_id:` at a second hub (on a second uart: bus) if you have an SS board too.
+# Shooting Star zone(s): needs Shooting Star support on the zone chip - either an
+# SS-firmware unit, or this repo's firmware/star_zone/ replacement firmware. Commented out
+# here since this example targets a single stock SP-firmware board, which ignores X/Y/Z
+# entirely. Uncomment (merging into the `light:` block above - YAML allows the key only
+# once) and point `illuminate_id:` at a second hub if you have a separate SS board.
 #
-# light:
 #   - platform: illuminate
 #     type: shooting_star
 #     name: Shooting Star Zone 1
-#     illuminate_id: illuminate_hub_ss
+#     illuminate_id: illuminate_hub
 #     zone: zone_1        # zone_1 / zone_2 / zone_3 (SS1/SS2/SS3 on the board silkscreen)
-#     duration: 1min       # 1min / 2min / 5min / 10min - fixed shot length for this entity
+#     interval: 30s       # gap BETWEEN shots, not a shot length - see README
+#
+# For the full star_zone enhancement command set (master brightness, effect speed,
+# palettes, meteor shower, identify mode, per-zone streak shaping), see cooper_ceiling.yaml
+# - it wires all of them up as template number/switch/select/button entities calling the
+# hub's public send_* methods.
